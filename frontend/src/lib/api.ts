@@ -189,15 +189,15 @@ export function companyAskStream(
 
 // ── Trends ──────────────────────────────────────────────────────────────────
 
-export interface TrendPoint { year: number; count: number; total_amount: number }
-export interface AgencyShare { agency: string; count: number }
-export interface TopicCluster { topic: string; count: number }
+export interface TrendPoint { year: number; count: number; total_amount: number; [k: string]: unknown }
+export interface AgencyShare { agency: string; count: number; [k: string]: unknown }
+export interface TopicCluster { topic: string; count: number; [k: string]: unknown }
 
 export interface TrendsData {
   by_year: TrendPoint[]
   by_agency: AgencyShare[]
-  by_phase: { phase: string; count: number }[]
-  top_states: { state: string; count: number }[]
+  by_phase: { phase: string; count: number; [k: string]: unknown }[]
+  top_states: { state: string; count: number; [k: string]: unknown }[]
 }
 
 export async function fetchTrends(filters: SearchFilters = {}): Promise<TrendsData> {
