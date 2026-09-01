@@ -12,6 +12,7 @@ SSE event types:
 
 import json
 import logging
+import time
 from collections import defaultdict
 from typing import Iterator
 
@@ -20,6 +21,59 @@ import anthropic
 from .models import AwardResult
 
 log = logging.getLogger(__name__)
+
+# ── Global stats cache ────────────────────────────────────────────────────────
+# Fetched once from Supabase (no filters = full corpus), refreshed every hour.
+
+_global_stats_cache: dict | None = None
+_global_stats_ts: float = 0.0
+_GLOBAL_TTL = 3600
+
+
+def _get_global_stats() -> dict:
+    global _global_stats_cache, _global_stats_ts
+    if _global_stats_cache and time.time() - _global_stats_ts < _GLOBAL_TTL:
+        return _global_stats_cache
+    try:
+        from .trends import get_trends
+        from .models import SearchFilters
+        _global_stats_cache = get_trends(SearchFilters())
+        _global_stats_ts = time.time()
+    except Exception as e:
+        log.warning("Could not fetch global stats: %s", e)
+        _global_stats_cache = _global_stats_cache or {}
+    return _global_stats_cache
+
+
+def _format_global_stats(data: dict) -> str:
+    by_year    = data.get('by_year', [])
+    by_agency  = data.get('by_agency', [])
+    by_phase   = data.get('by_phase', [])
+    top_states = data.get('top_states', [])
+
+    total_awards  = sum(r.get('count', 0) for r in by_year)
+    total_funding = sum(r.get('total_amount', 0) for r in by_year)
+    year_min = by_year[0]['year']  if by_year else 1983
+    year_max = by_year[-1]['year'] if by_year else 2026
+
+    lines = [
+        "DATABASE OVERVIEW (full corpus):",
+        f"  Total awards: {total_awards:,}",
+        f"  Total funding: ${total_funding:,}",
+        f"  Year range: {year_min}–{year_max}",
+    ]
+    if by_agency[:8]:
+        parts = [f"{r['agency']} ({r['count']:,} awards, ${r.get('total_amount', 0):,})"
+                 for r in by_agency[:8]]
+        lines.append(f"  Top agencies: {', '.join(parts)}")
+    if by_phase:
+        parts = [f"{r['phase']}: {r['count']:,}" for r in by_phase]
+        lines.append(f"  By phase: {', '.join(parts)}")
+    if top_states[:8]:
+        parts = [f"{r['state']} ({r['count']:,})" for r in top_states[:8]]
+        lines.append(f"  Top states: {', '.join(parts)}")
+
+    return '\n'.join(lines)
 
 CLAUDE_MODEL = "claude-opus-5"
 
@@ -134,6 +188,9 @@ def stream_synthesis(question: str, results: list[AwardResult]) -> Iterator[str]
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
         return
 
+    # Global corpus overview (cached, refreshed hourly)
+    global_block = _format_global_stats(_get_global_stats())
+
     # Aggregate stats across ALL retrieved results
     stats = _compute_stats(results)
     stats_block = _format_stats(stats)
@@ -144,11 +201,13 @@ def stream_synthesis(question: str, results: list[AwardResult]) -> Iterator[str]
 
     prompt = (
         f"Question: {question}\n\n"
+        f"{global_block}\n\n"
         f"{stats_block}\n\n"
         f"REPRESENTATIVE AWARDS (top {len(top)} by relevance, for supporting detail):\n\n"
         f"{examples}\n\n"
-        "Using both the aggregate statistics and the representative awards above, "
-        "answer the question comprehensively. Focus on patterns, trends, and insights "
+        "Using the database overview, aggregate statistics, and representative awards above, "
+        "answer the question comprehensively. Where useful, contextualise query-specific "
+        "figures against the full corpus totals. Focus on patterns, trends, and insights "
         "rather than enumerating individual awards."
     )
 
