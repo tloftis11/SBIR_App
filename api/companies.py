@@ -79,8 +79,7 @@ def stream_company_analysis(firm: str, awards: list[dict], question: str) -> Ite
     try:
         with client.messages.stream(
             model=CLAUDE_MODEL,
-            max_tokens=1024,
-            thinking={"type": "adaptive"},
+            max_tokens=4096,
             system=COMPANY_SYSTEM,
             messages=[{"role": "user", "content": prompt}],
         ) as stream:

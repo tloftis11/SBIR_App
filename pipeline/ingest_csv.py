@@ -50,7 +50,7 @@ def download_csv(dest: Path) -> Path:
     return dest
 
 
-def ingest_file(csv_path: Path, dry_run: bool = False) -> int:
+def ingest_file(csv_path: Path, dry_run: bool = False, start_year: int | None = None) -> int:
     """
     Parse the CSV and upsert records into Supabase.
 
@@ -58,6 +58,7 @@ def ingest_file(csv_path: Path, dry_run: bool = False) -> int:
     """
     total_written = 0
     total_skipped = 0
+    total_filtered = 0
     batch: list[dict] = []
 
     with open(csv_path, encoding="utf-8-sig", errors="replace", newline="") as f:
@@ -65,9 +66,22 @@ def ingest_file(csv_path: Path, dry_run: bool = False) -> int:
         rows = list(reader)  # count for the progress bar
 
     log.info("Parsed %d rows from CSV", len(rows))
+    if start_year:
+        log.info("Filtering to award_year >= %d", start_year)
 
     with tqdm(total=len(rows), desc="Loading awards", unit="row") as bar:
         for raw in rows:
+            # Year filter: check raw CSV field before normalizing to save time
+            if start_year:
+                raw_year = raw.get("Award Year") or raw.get("award_year") or raw.get("year") or ""
+                try:
+                    if int(raw_year) < start_year:
+                        total_filtered += 1
+                        bar.update(1)
+                        continue
+                except (ValueError, TypeError):
+                    pass  # can't parse year — let normalize handle it
+
             record = normalize(raw)
             if record is None:
                 total_skipped += 1
@@ -95,7 +109,7 @@ def ingest_file(csv_path: Path, dry_run: bool = False) -> int:
         upsert_awards(batch)
         total_written += len(batch)
 
-    log.info("Done. Written=%d Skipped=%d", total_written, total_skipped)
+    log.info("Done. Written=%d Skipped=%d Filtered(year)=%d", total_written, total_skipped, total_filtered)
     return total_written
 
 
@@ -105,18 +119,22 @@ def main():
                         help="Path to a pre-downloaded award_data.csv (skips download)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Print first 5 normalized rows without writing to DB")
+    parser.add_argument("--start-year", type=int, metavar="YEAR",
+                        help="Only ingest awards from this year onwards (e.g. 2024)")
+    parser.add_argument("--dest", type=Path, metavar="PATH", default=Path("award_data_fresh.csv"),
+                        help="Destination path for downloaded CSV (default: award_data_fresh.csv)")
     args = parser.parse_args()
 
     csv_path = args.file
     if csv_path is None:
-        csv_path = Path("award_data.csv")
+        csv_path = args.dest
         if not csv_path.exists():
             download_csv(csv_path)
         else:
             log.info("Using existing %s", csv_path)
 
     t0 = time.time()
-    written = ingest_file(csv_path, dry_run=args.dry_run)
+    written = ingest_file(csv_path, dry_run=args.dry_run, start_year=args.start_year)
     elapsed = time.time() - t0
     log.info("Ingest complete: %d rows in %.1f min", written, elapsed / 60)
 

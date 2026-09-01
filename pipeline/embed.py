@@ -64,22 +64,27 @@ def embed_and_store(awards: list[dict]) -> int:
     total = 0
     with tqdm(total=len(awards), desc="Embedding", unit="award") as bar:
         for batch in _batches(awards, EMBED_BATCH_SIZE):
-            texts = [embed_text(a) for a in batch]
-            vectors = _embed_batch(texts)
+            try:
+                texts = [embed_text(a) for a in batch]
+                vectors = _embed_batch(texts)
 
-            rows = [
-                {
-                    "award_id":  award["id"],
-                    "embedding": vector,
-                    "model":     EMBED_MODEL,
-                }
-                for award, vector in zip(batch, vectors)
-            ]
+                rows = [
+                    {
+                        "award_id":  award["id"],
+                        "embedding": vector,
+                        "model":     EMBED_MODEL,
+                    }
+                    for award, vector in zip(batch, vectors)
+                ]
 
-            written = upsert_embeddings(rows)
-            total += written
-            bar.update(len(batch))
-            time.sleep(0.05)  # stay well under rate limits
+                written = upsert_embeddings(rows)
+                total += written
+            except Exception as exc:
+                log.warning("Batch failed (%s), skipping %d records: %s",
+                            type(exc).__name__, len(batch), exc)
+            finally:
+                bar.update(len(batch))
+                time.sleep(0.05)  # stay well under rate limits
 
     return total
 

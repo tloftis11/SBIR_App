@@ -102,8 +102,7 @@ def stream_trend_analysis(question: str) -> Iterator[str]:
     try:
         with client.messages.stream(
             model=CLAUDE_MODEL,
-            max_tokens=1024,
-            thinking={"type": "adaptive"},
+            max_tokens=4096,
             system=TREND_SYSTEM,
             messages=[{"role": "user", "content": question}],
         ) as stream:

@@ -14,23 +14,23 @@ const compactUsd = (n: number) =>
 
 // ── Inline SVG line chart ─────────────────────────────────────────────────────
 
-function LineChart({ data }: { data: { year: number; count: number }[] }) {
+function LineChart({ data }: { data: { year: number; total_amount: number }[] }) {
   if (!data.length) return null
   const W = 560, H = 140
-  const pad = { t: 8, r: 12, b: 28, l: 44 }
+  const pad = { t: 8, r: 12, b: 28, l: 52 }
   const iW = W - pad.l - pad.r
   const iH = H - pad.t - pad.b
 
   const minX = data[0].year, maxX = data[data.length - 1].year
-  const maxY = Math.max(...data.map(d => d.count)) * 1.1 || 1
+  const maxY = Math.max(...data.map(d => d.total_amount)) * 1.1 || 1
 
   const x = (yr: number) => pad.l + ((yr - minX) / (maxX - minX || 1)) * iW
   const y = (c: number)  => pad.t + iH - (c / maxY) * iH
 
-  const linePts = data.map(d => `${x(d.year)},${y(d.count)}`).join(' ')
+  const linePts = data.map(d => `${x(d.year)},${y(d.total_amount)}`).join(' ')
   const areaPts =
     `${x(data[0].year)},${y(0)} ` +
-    data.map(d => `${x(d.year)},${y(d.count)}`).join(' ') +
+    data.map(d => `${x(d.year)},${y(d.total_amount)}`).join(' ') +
     ` ${x(data[data.length - 1].year)},${y(0)}`
 
   const yTicks = [0, 0.5, 1].map(t => Math.round(t * maxY))
@@ -46,7 +46,7 @@ function LineChart({ data }: { data: { year: number; count: number }[] }) {
           <line x1={pad.l} x2={W - pad.r} y1={y(v)} y2={y(v)}
             stroke="rgba(0,0,0,0.06)" strokeWidth="1" />
           <text x={pad.l - 6} y={y(v) + 4} textAnchor="end"
-            fontSize="10" fill="#aeaeb2">{compact(v)}</text>
+            fontSize="10" fill="#aeaeb2">{compactUsd(v)}</text>
         </g>
       ))}
       {/* Area fill */}
@@ -56,7 +56,7 @@ function LineChart({ data }: { data: { year: number; count: number }[] }) {
         strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
       {/* Dots */}
       {data.map(d => (
-        <circle key={d.year} cx={x(d.year)} cy={y(d.count)} r="2.5"
+        <circle key={d.year} cx={x(d.year)} cy={y(d.total_amount)} r="2.5"
           fill="#fff" stroke="#0071e3" strokeWidth="2" />
       ))}
       {/* x-axis labels */}
@@ -258,7 +258,7 @@ export default function TrendsTab({ filterOptions }: Props) {
 
           {/* Charts row */}
           <div className="grid grid-cols-2 gap-4">
-            <Card title="Awards Over Time">
+            <Card title="Funding Over Time">
               <div className="col-span-2">
                 <LineChart data={trends.by_year} />
               </div>

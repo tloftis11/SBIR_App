@@ -77,8 +77,7 @@ def stream_synthesis(question: str, results: list[AwardResult]) -> Iterator[str]
     try:
         with client.messages.stream(
             model=CLAUDE_MODEL,
-            max_tokens=2048,
-            thinking={"type": "adaptive"},
+            max_tokens=4096,
             system=SYSTEM,
             messages=[{"role": "user", "content": prompt}],
         ) as stream:
