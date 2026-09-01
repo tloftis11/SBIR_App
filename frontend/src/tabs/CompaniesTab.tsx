@@ -203,8 +203,8 @@ function CompanyDetail({ company, filters }: { company: CompanySummary; filters:
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Company header */}
-      <div className="px-6 pt-6 pb-5" style={{ borderBottom: '1px solid rgba(0,0,0,0.07)' }}>
+      {/* Company header — scrollable so acquisition badge + agency bars don't squeeze the awards list */}
+      <div className="px-6 pt-6 pb-5 overflow-y-auto" style={{ borderBottom: '1px solid rgba(0,0,0,0.07)', maxHeight: '52%' }}>
         <h2 className="text-[18px] font-semibold text-apple-text tracking-tight leading-tight">
           {company.firm}
         </h2>
