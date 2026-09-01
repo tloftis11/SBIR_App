@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 import CompaniesTab from './tabs/CompaniesTab'
 import SearchTab from './tabs/SearchTab'
 import TrendsTab from './tabs/TrendsTab'
+import AcquisitionTargetsTab from './tabs/AcquisitionTargetsTab'
 import { type FilterOptions, fetchFilters } from './lib/api'
 
-type Tab = 'search' | 'companies' | 'trends'
+type Tab = 'search' | 'companies' | 'trends' | 'targets'
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('search')
@@ -30,7 +31,7 @@ export default function App() {
             className="flex rounded-lg p-0.5"
             style={{ background: 'rgba(0,0,0,0.06)' }}
           >
-            {([['search', 'Search'], ['companies', 'Companies'], ['trends', 'Trends']] as [Tab, string][]).map(([id, label]) => (
+            {([['search', 'Search'], ['companies', 'Companies'], ['trends', 'Trends'], ['targets', 'Acq. Targets ✦']] as [Tab, string][]).map(([id, label]) => (
               <button
                 key={id}
                 onClick={() => setTab(id)}
@@ -51,6 +52,7 @@ export default function App() {
       {tab === 'search'     && <SearchTab    filterOptions={filterOptions} />}
       {tab === 'companies'  && <CompaniesTab  filterOptions={filterOptions} />}
       {tab === 'trends'     && <TrendsTab     filterOptions={filterOptions} />}
+      {tab === 'targets'    && <AcquisitionTargetsTab />}
     </div>
   )
 }

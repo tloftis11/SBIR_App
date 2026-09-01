@@ -21,6 +21,7 @@ from .synthesize import stream_synthesis
 from .trends import get_trends, stream_trend_analysis
 from .companies import search_companies, get_company_awards, stream_company_analysis
 from .acquisition import get_acquisition_info
+from .acquisition_targets import stream_acquisition_targets
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -142,6 +143,28 @@ def company_ask(req: CompanyAskRequest):
     awards = get_company_awards(req.firm)
     return StreamingResponse(
         stream_company_analysis(req.firm, awards, req.question),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+class AcquisitionTargetsCriteria(BaseModel):
+    domains: list[str] = []
+    technology_query: str = ""
+    agencies: list[str] = []
+    company_profile: str = "either"
+    rationale: list[str] = []
+    open_criteria: str = ""
+
+
+@app.post("/acquisition-targets")
+def acquisition_targets(req: AcquisitionTargetsCriteria):
+    """
+    Multi-step pipeline: find SBIR companies matching M&A criteria,
+    enrich with web research, stream Claude's strategic analysis.
+    """
+    return StreamingResponse(
+        stream_acquisition_targets(req.model_dump()),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

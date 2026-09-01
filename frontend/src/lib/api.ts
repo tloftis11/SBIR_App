@@ -205,6 +205,78 @@ export function companyAskStream(
   return () => { cancelled = true }
 }
 
+// ── Acquisition Targets ──────────────────────────────────────────────────────
+
+export interface AcquisitionCriteria {
+  domains: string[]
+  technology_query: string
+  agencies: string[]
+  company_profile: 'specialist' | 'platform' | 'either'
+  rationale: string[]
+  open_criteria: string
+}
+
+export interface CompanyTarget {
+  firm: string
+  state?: string
+  award_count: number
+  total_funding: number
+  phase_2_count: number
+  phase_2_rate: number
+  year_first?: number
+  year_last?: number
+  primary_agency?: string
+  fit_score: number
+  // web research
+  revenue_estimate?: string
+  employee_count?: number
+  already_acquired?: boolean
+  acquirer?: string
+  acquisition_year?: number
+  recent_news?: string
+  web_confidence?: 'high' | 'medium' | 'low'
+}
+
+export type AcqTargetEvent =
+  | { type: 'progress'; data: { message: string; current: number; total: number } }
+  | { type: 'text'; data: string }
+  | { type: 'targets'; data: CompanyTarget[] }
+  | { type: 'acquired'; data: CompanyTarget[] }
+  | { type: 'done' }
+
+export function acquisitionTargetsStream(
+  criteria: AcquisitionCriteria,
+  onEvent: (e: AcqTargetEvent) => void,
+  onError: (err: Error) => void,
+): () => void {
+  let cancelled = false
+  fetch(`${BASE}/acquisition-targets`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(criteria),
+  })
+    .then(async (res) => {
+      if (!res.ok) throw new Error('Acquisition targets request failed')
+      const reader = res.body!.getReader()
+      const decoder = new TextDecoder()
+      let buf = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done || cancelled) break
+        buf += decoder.decode(value, { stream: true })
+        const parts = buf.split('\n\n')
+        buf = parts.pop() ?? ''
+        for (const part of parts) {
+          const line = part.replace(/^data: /, '').trim()
+          if (!line) continue
+          try { onEvent(JSON.parse(line) as AcqTargetEvent) } catch {}
+        }
+      }
+    })
+    .catch((err) => { if (!cancelled) onError(err) })
+  return () => { cancelled = true }
+}
+
 // ── Trends ──────────────────────────────────────────────────────────────────
 
 export interface TrendPoint { year: number; count: number; total_amount: number; [k: string]: unknown }
