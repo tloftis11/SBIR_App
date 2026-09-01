@@ -31,10 +31,12 @@ from .models import SearchFilters
 
 log = logging.getLogger(__name__)
 
-CLAUDE_MODEL = "claude-opus-5"
-MAX_RESEARCH = 8    # companies researched per run
-MAX_WORKERS  = 4    # parallel web-search threads
-TOP_N        = 5    # active targets returned to UI
+CLAUDE_MODEL     = "claude-opus-5"
+MAX_RESEARCH     = 5    # companies researched per run (one parallel batch)
+MAX_WORKERS      = 5    # parallel web-search threads
+TOP_N            = 5    # active targets returned to UI
+SEMANTIC_LIMIT   = 150  # award results for candidate discovery
+KEEPALIVE_SECS   = 5    # how often to send SSE keepalive during silence
 
 
 # ── Candidate discovery ───────────────────────────────────────────────────────
@@ -51,7 +53,7 @@ def _find_candidates(criteria: dict) -> list[dict]:
     company_profile   = criteria.get("company_profile", "either")
 
     if technology_query:
-        results = semantic_search(technology_query, SearchFilters(), 300)
+        results = semantic_search(technology_query, SearchFilters(), SEMANTIC_LIMIT)
 
         firms: dict[str, dict] = {}
         for r in results:
@@ -195,8 +197,8 @@ def _research_company(company: dict, criteria: dict) -> dict:
     try:
         response = client.messages.create(
             model=CLAUDE_MODEL,
-            max_tokens=512,
-            tools=[{"type": "web_search_20260209", "name": "web_search", "max_uses": 3}],
+            max_tokens=256,
+            tools=[{"type": "web_search_20260209", "name": "web_search", "max_uses": 1}],
             messages=[{"role": "user", "content": prompt}],
         )
         text = "".join(
@@ -398,11 +400,11 @@ def stream_acquisition_targets(criteria: dict) -> Iterator[str]:
 
     while True:
         try:
-            item = ev_queue.get(timeout=20)
+            item = ev_queue.get(timeout=KEEPALIVE_SECS)
             if item is None:
                 break
             yield item
         except queue.Empty:
-            yield ": keepalive\n\n"
+            yield ": keepalive\n\n"  # SSE comment; browser/Render ignores it
 
     worker.join(timeout=5)

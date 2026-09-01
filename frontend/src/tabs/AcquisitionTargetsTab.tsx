@@ -427,7 +427,23 @@ export default function AcquisitionTargetsTab() {
       {/* Error */}
       {error && (
         <div className="mb-6 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-[13px] text-red-700">
-          {error}
+          <p className="font-medium">Search failed</p>
+          <p className="mt-0.5 opacity-75">{error}</p>
+          {progressMsg && (
+            <p className="mt-1 opacity-60 text-[11px]">Last status: {progressMsg}</p>
+          )}
+        </div>
+      )}
+
+      {/* No results */}
+      {!isSearching && !error && targets.length === 0 && acquiredList.length === 0 && !synthesis && (
+        <div className="mb-6 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white px-5 py-8 text-center">
+          <p className="text-[14px] text-apple-secondary">
+            No candidates found matching your criteria.
+          </p>
+          <p className="mt-1 text-[12px] text-apple-secondary opacity-60">
+            Try broadening your technology description or removing agency filters.
+          </p>
         </div>
       )}
 
