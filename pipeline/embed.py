@@ -15,11 +15,12 @@ import time
 from typing import Iterator
 
 import voyageai
+from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
 from tqdm import tqdm
 
 from .config import VOYAGE_API_KEY, EMBED_MODEL, EMBED_BATCH_SIZE
 from .transform import embed_text
-from .load import fetch_unembedded_awards, upsert_embeddings
+from .load import stream_awards, get_embedded_ids_for, upsert_embeddings
 
 log = logging.getLogger(__name__)
 
@@ -38,8 +39,17 @@ def _batches(items: list, size: int) -> Iterator[list]:
         yield items[i : i + size]
 
 
+@retry(
+    retry=retry_if_exception_type(voyageai.error.RateLimitError),
+    wait=wait_exponential(multiplier=1, min=20, max=120),
+    stop=stop_after_attempt(8),
+    before_sleep=lambda rs: log.warning(
+        "Voyage AI rate limit — retrying in %.0fs (attempt %d)",
+        rs.next_action.sleep, rs.attempt_number
+    ),
+)
 def _embed_batch(texts: list[str]) -> list[list[float]]:
-    """Call Voyage AI embeddings for a batch of texts."""
+    """Call Voyage AI embeddings for a batch of texts, with rate-limit retries."""
     client = get_voyage()
     result = client.embed(texts, model=EMBED_MODEL, input_type="document")
     return result.embeddings
@@ -76,12 +86,25 @@ def embed_and_store(awards: list[dict]) -> int:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    log.info("Fetching awards without embeddings...")
-    unembedded = fetch_unembedded_awards()
-    log.info("Found %d awards to embed", len(unembedded))
+    log.info("Streaming awards and embedding in pages...")
 
-    if not unembedded:
-        log.info("Nothing to do.")
-    else:
-        written = embed_and_store(unembedded)
-        log.info("Done. Wrote %d embeddings.", written)
+    total_written = 0
+    total_skipped = 0
+    page_num = 0
+
+    for page in stream_awards(page_size=500):
+        page_num += 1
+        ids = [r["id"] for r in page]
+        already = get_embedded_ids_for(ids)
+        to_embed = [r for r in page if r["id"] not in already]
+        total_skipped += len(already)
+
+        if to_embed:
+            written = embed_and_store(to_embed)
+            total_written += written
+
+        if page_num % 10 == 0:
+            log.info("Page %d | embedded so far: %d | skipped: %d",
+                     page_num, total_written, total_skipped)
+
+    log.info("Done. Total written=%d skipped=%d", total_written, total_skipped)

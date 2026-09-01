@@ -13,9 +13,13 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
-from .models import SearchRequest, SearchResponse, AskRequest, FilterOptions
+from pydantic import BaseModel
+
+from .models import SearchRequest, SearchResponse, AskRequest, FilterOptions, SearchFilters
 from .search import semantic_search, get_filter_options
 from .synthesize import stream_synthesis
+from .trends import get_trends, stream_trend_analysis
+from .companies import search_companies, get_company_awards, stream_company_analysis
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -58,6 +62,75 @@ def search(req: SearchRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
     return SearchResponse(results=results, total=len(results), query=req.query)
+
+
+@app.post("/trends")
+def trends(filters: SearchFilters):
+    """Aggregate award counts and amounts by year, agency, phase, and state."""
+    try:
+        return get_trends(filters)
+    except Exception as e:
+        log.error("Trends error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class TrendAskRequest(BaseModel):
+    question: str
+
+
+@app.post("/trends/ask")
+def trends_ask(req: TrendAskRequest):
+    """Stream Claude's analysis of SBIR trends."""
+    return StreamingResponse(
+        stream_trend_analysis(req.question),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+class CompanySearchRequest(BaseModel):
+    query: str = ""
+    sort_by: str = "count"
+    filter_agency: str | None = None
+    filter_state: str | None = None
+    filter_phase: str | None = None
+    limit: int = 30
+
+
+class CompanyAskRequest(BaseModel):
+    firm: str
+    question: str = "Summarize this company's SBIR portfolio and research focus."
+
+
+@app.post("/companies/search")
+def companies_search(req: CompanySearchRequest):
+    try:
+        return search_companies(
+            req.query, req.sort_by, req.filter_agency,
+            req.filter_state, req.filter_phase, req.limit,
+        )
+    except Exception as e:
+        log.error("Company search error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/companies/{firm_name}/awards")
+def company_awards_route(firm_name: str):
+    try:
+        return get_company_awards(firm_name)
+    except Exception as e:
+        log.error("Company awards error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/companies/ask")
+def company_ask(req: CompanyAskRequest):
+    awards = get_company_awards(req.firm)
+    return StreamingResponse(
+        stream_company_analysis(req.firm, awards, req.question),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.post("/ask")

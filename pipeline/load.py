@@ -38,11 +38,18 @@ def upsert_awards(records: list[dict]) -> int:
     return len(deduped)
 
 
-def get_embedded_ids() -> set[str]:
-    """Return the set of award IDs that already have embeddings stored."""
+def get_embedded_ids_for(award_ids: list[str]) -> set[str]:
+    """Return which of the given award IDs already have embeddings."""
+    if not award_ids:
+        return set()
     db = get_client()
-    response = db.table("award_embeddings").select("award_id").execute()
-    return {row["award_id"] for row in (response.data or [])}
+    resp = (
+        db.table("award_embeddings")
+        .select("award_id")
+        .in_("award_id", award_ids)
+        .execute()
+    )
+    return {row["award_id"] for row in (resp.data or [])}
 
 
 def upsert_embeddings(rows: list[dict]) -> int:
@@ -60,40 +67,29 @@ def upsert_embeddings(rows: list[dict]) -> int:
     return len(rows)
 
 
-def fetch_unembedded_awards(batch_size: int = 500) -> list[dict]:
+def stream_awards(page_size: int = 500):
     """
-    Return awards that don't yet have a matching row in award_embeddings.
+    Generator: yield pages of award dicts using keyset pagination ordered by id.
 
-    Uses a NOT IN subquery via Supabase's filter syntax. For very large tables
-    (200k+) you may prefer a LEFT JOIN query run directly in Postgres.
+    Keyset pagination avoids the statement-timeout that offset-based pagination
+    hits on large tables (Supabase free tier has a 30-second limit).
     """
     db = get_client()
-
-    embedded_ids = get_embedded_ids()
-
-    # Pull awards in pages and filter client-side for simplicity.
-    # For large tables, replace with a Postgres RPC that does a server-side join.
-    result = []
-    page = 0
-    page_size = 1000
+    cursor = ""  # empty string sorts before any real id
 
     while True:
         resp = (
             db.table("awards")
             .select("id, title, abstract, keywords, agency, phase")
-            .range(page * page_size, (page + 1) * page_size - 1)
+            .gt("id", cursor)
+            .order("id")
+            .limit(page_size)
             .execute()
         )
         rows = resp.data or []
         if not rows:
             break
-
-        for row in rows:
-            if row["id"] not in embedded_ids:
-                result.append(row)
-
+        yield rows
         if len(rows) < page_size:
             break
-        page += 1
-
-    return result
+        cursor = rows[-1]["id"]
