@@ -202,9 +202,10 @@ function CompanyDetail({ company, filters }: { company: CompanySummary; filters:
     : 0
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      {/* Company header — scrollable so acquisition badge + agency bars don't squeeze the awards list */}
-      <div className="px-6 pt-6 pb-5 overflow-y-auto" style={{ borderBottom: '1px solid rgba(0,0,0,0.07)', maxHeight: '52%' }}>
+    <div className="h-full overflow-y-auto">
+
+      {/* Company header */}
+      <div className="px-6 pt-6 pb-5" style={{ borderBottom: '1px solid rgba(0,0,0,0.07)' }}>
         <h2 className="text-[18px] font-semibold text-apple-text tracking-tight leading-tight">
           {company.firm}
         </h2>
@@ -270,10 +271,7 @@ function CompanyDetail({ company, filters }: { company: CompanySummary; filters:
                 <div className="flex-1 bg-[#f5f5f7] rounded-full h-3 overflow-hidden">
                   <div
                     className="h-3 rounded-full"
-                    style={{
-                      width: `${(count / maxAgency) * 100}%`,
-                      background: '#0071e3',
-                    }}
+                    style={{ width: `${(count / maxAgency) * 100}%`, background: '#0071e3' }}
                   />
                 </div>
                 <span className="text-[11px] text-apple-tertiary w-6 text-right">{count}</span>
@@ -309,7 +307,7 @@ function CompanyDetail({ company, filters }: { company: CompanySummary; filters:
               <p className="text-[10px] font-semibold text-apple-tertiary uppercase tracking-wider">Claude</p>
               {streaming && <span className="w-1.5 h-1.5 rounded-full bg-apple-blue animate-pulse" />}
             </div>
-            <div className="overflow-y-auto prose prose-sm max-w-none text-[13px] text-apple-text" style={{ maxHeight: 240 }}>
+            <div className="prose prose-sm max-w-none text-[13px] text-apple-text">
               <ReactMarkdown>{answer}</ReactMarkdown>
             </div>
           </div>
@@ -317,8 +315,8 @@ function CompanyDetail({ company, filters }: { company: CompanySummary; filters:
       </div>
 
       {/* Awards list */}
-      <div className="flex-1 overflow-y-auto">
-        {/* Sort controls */}
+      <div>
+        {/* Sort controls — sticky within the scroll container */}
         <div
           className="px-5 py-2.5 flex items-center justify-between sticky top-0 bg-white"
           style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', zIndex: 1 }}
@@ -349,6 +347,7 @@ function CompanyDetail({ company, filters }: { company: CompanySummary; filters:
 
         {sorted.map(a => <AwardRow key={a.id} award={a} />)}
       </div>
+
     </div>
   )
 }
