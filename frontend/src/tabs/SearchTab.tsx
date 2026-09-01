@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react'
-import AwardCard from '../components/AwardCard'
 import {
-  type AwardResult, type FilterOptions, type SearchFilters,
+  type FilterOptions, type SearchFilters,
   askStream,
 } from '../lib/api'
 
@@ -119,7 +118,6 @@ export default function SearchTab({ filterOptions }: Props) {
   const [query,   setQuery]   = useState('')
   const [filters, setFilters] = useState<SearchFilters>({})
 
-  const [results,   setResults]   = useState<AwardResult[]>([])
   const [synthesis, setSynthesis] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [error,     setError]     = useState<string | null>(null)
@@ -133,13 +131,12 @@ export default function SearchTab({ filterOptions }: Props) {
     if (!q.trim()) return
     setQuery(q)
     cancel()
-    setError(null); setSynthesis(''); setResults([]); setSearched(true)
+    setError(null); setSynthesis(''); setSearched(true)
     setStreaming(true)
     cancelRef.current = askStream(
       q, filters, 25,
       ev => {
-        if (ev.type === 'results') setResults(ev.data)
-        else if (ev.type === 'text') setSynthesis(s => s + ev.data)
+        if (ev.type === 'text') setSynthesis(s => s + ev.data)
         else if (ev.type === 'done') setStreaming(false)
       },
       err => { setError(err.message); setStreaming(false) },
@@ -147,7 +144,6 @@ export default function SearchTab({ filterOptions }: Props) {
   }
 
   const busy = streaming
-  const hasResults = results.length > 0 || !!synthesis
 
   return (
     <div className="max-w-5xl mx-auto px-8">
@@ -240,20 +236,8 @@ export default function SearchTab({ filterOptions }: Props) {
             </div>
           )}
 
-          {/* Result count */}
-          {hasResults && !streaming && (
-            <p className="text-[12px] text-apple-tertiary pl-1">
-              {results.length} award{results.length !== 1 ? 's' : ''} matched
-            </p>
-          )}
-
-          {/* Award cards */}
-          <div className="space-y-3">
-            {results.map(a => <AwardCard key={a.id} award={a} />)}
-          </div>
-
           {/* No results */}
-          {!streaming && results.length === 0 && !error && !synthesis && (
+          {!streaming && !synthesis && !error && (
             <div className="text-center py-16">
               <p className="text-[14px] text-apple-secondary">No results found</p>
               <p className="text-[13px] text-apple-tertiary mt-1">Try a broader or different query</p>

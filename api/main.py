@@ -145,7 +145,7 @@ def ask(req: AskRequest):
       data: {"type": "done"}
     """
     try:
-        results = semantic_search(req.question, req.filters, req.limit)
+        results = semantic_search(req.question, req.filters, 75)
     except Exception as e:
         log.error("Search error in /ask: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
