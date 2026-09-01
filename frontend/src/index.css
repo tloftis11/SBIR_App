@@ -26,3 +26,23 @@
 
   select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236e6e73' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px !important; cursor: pointer; }
 }
+
+/* ── Prose (react-markdown) overrides ───────────────────────────────────── */
+.prose {
+  --tw-prose-body:       #1d1d1f;
+  --tw-prose-headings:   #1d1d1f;
+  --tw-prose-lead:       #6e6e73;
+  --tw-prose-links:      #0071e3;
+  --tw-prose-bold:       #1d1d1f;
+  --tw-prose-counters:   #6e6e73;
+  --tw-prose-bullets:    #aeaeb2;
+  --tw-prose-hr:         rgba(0,0,0,0.08);
+  --tw-prose-quotes:     #1d1d1f;
+  --tw-prose-quote-borders: rgba(0,0,0,0.12);
+  --tw-prose-captions:   #6e6e73;
+  --tw-prose-code:       #1d1d1f;
+  --tw-prose-pre-code:   #1d1d1f;
+  --tw-prose-pre-bg:     rgba(0,0,0,0.04);
+  --tw-prose-th-borders: rgba(0,0,0,0.10);
+  --tw-prose-td-borders: rgba(0,0,0,0.06);
+}

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
 import {
   type FilterOptions, type SearchFilters, type TrendsData,
   fetchTrends, trendAskStream,
@@ -272,7 +273,9 @@ export default function TrendsTab({ filterOptions }: Props) {
               </p>
               {streaming && <span className="w-1.5 h-1.5 rounded-full bg-apple-blue animate-pulse" />}
             </div>
-            <p className="text-[14px] text-apple-text leading-relaxed whitespace-pre-wrap">{answer}</p>
+            <div className="text-[14px] text-apple-text leading-relaxed prose prose-sm max-w-none">
+              <ReactMarkdown>{answer}</ReactMarkdown>
+            </div>
           </div>
         )}
       </div>

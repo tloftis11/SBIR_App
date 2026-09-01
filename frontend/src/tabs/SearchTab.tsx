@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
 import {
   type FilterOptions, type SearchFilters,
   askStream,
@@ -232,7 +233,9 @@ export default function SearchTab({ filterOptions }: Props) {
                   <span className="w-1.5 h-1.5 rounded-full bg-apple-blue animate-pulse" />
                 )}
               </div>
-              <p className="text-[14px] text-apple-text leading-relaxed whitespace-pre-wrap">{synthesis}</p>
+              <div className="text-[14px] text-apple-text leading-relaxed prose prose-sm max-w-none">
+                <ReactMarkdown>{synthesis}</ReactMarkdown>
+              </div>
             </div>
           )}
 
