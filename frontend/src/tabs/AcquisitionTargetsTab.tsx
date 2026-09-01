@@ -248,10 +248,12 @@ export default function AcquisitionTargetsTab() {
               ? Math.round((ev.data.current / ev.data.total) * 100)
               : 0
           )
-        } else if (ev.type === 'targets') {
-          setTargets(ev.data)
-        } else if (ev.type === 'acquired') {
-          setAcquiredList(ev.data)
+        } else if (ev.type === 'company') {
+          if (ev.data.already_acquired) {
+            setAcquiredList(prev => [...prev, ev.data])
+          } else {
+            setTargets(prev => [...prev, ev.data])
+          }
         } else if (ev.type === 'text') {
           setSynthesis(prev => prev + ev.data)
         } else if (ev.type === 'done') {
@@ -447,14 +449,21 @@ export default function AcquisitionTargetsTab() {
         </div>
       )}
 
-      {/* Top 5 target cards */}
+      {/* Target cards — appear as each is researched, sorted by fit score */}
       {targets.length > 0 && (
         <section className="mb-8">
           <h2 className="text-[15px] font-semibold text-apple-text mb-3">
-            Top Acquisition Targets
+            Acquisition Targets
+            {isSearching && (
+              <span className="ml-2 text-[11px] font-normal text-apple-secondary">
+                loading…
+              </span>
+            )}
           </h2>
           <div className="space-y-3">
-            {targets.map(c => <TargetCard key={c.firm} company={c} />)}
+            {[...targets]
+              .sort((a, b) => b.fit_score - a.fit_score)
+              .map(c => <TargetCard key={c.firm} company={c} />)}
           </div>
         </section>
       )}

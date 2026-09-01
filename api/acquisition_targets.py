@@ -79,8 +79,6 @@ def _find_candidates(criteria: dict) -> list[dict]:
 
         candidates = []
         for firm, d in firms.items():
-            if d["award_count"] < 2:
-                continue
             primary_agency = Counter(d["agencies"]).most_common(1)[0][0] if d["agencies"] else None
             state          = Counter(d["states"]).most_common(1)[0][0]   if d["states"]   else None
 
@@ -324,17 +322,15 @@ def _run_pipeline(criteria: dict, ev_queue: queue.Queue) -> None:
                     else:
                         researched.append(enriched)
 
+                # Send card immediately so the frontend can render it right away
+                push({"type": "company", "data": enriched})
                 push({"type": "progress", "data": {
                     "message": f"Researched {firm}…",
                     "current": completed_count[0],
                     "total": total,
                 }})
 
-        top5      = sorted(researched, key=lambda x: x.get("fit_score", 0), reverse=True)[:TOP_N]
-        acq_sorted = sorted(acquired,  key=lambda x: x.get("fit_score", 0), reverse=True)
-
-        push({"type": "targets",  "data": top5})
-        push({"type": "acquired", "data": acq_sorted})
+        top5 = sorted(researched, key=lambda x: x.get("fit_score", 0), reverse=True)[:TOP_N]
 
         push({"type": "progress", "data": {
             "message": "Generating strategic analysis…",

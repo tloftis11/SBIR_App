@@ -239,9 +239,8 @@ export interface CompanyTarget {
 
 export type AcqTargetEvent =
   | { type: 'progress'; data: { message: string; current: number; total: number } }
+  | { type: 'company'; data: CompanyTarget }
   | { type: 'text'; data: string }
-  | { type: 'targets'; data: CompanyTarget[] }
-  | { type: 'acquired'; data: CompanyTarget[] }
   | { type: 'done' }
 
 export function acquisitionTargetsStream(
