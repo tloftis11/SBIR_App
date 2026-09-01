@@ -1,0 +1,6 @@
+.env
+award_data.csv
+award_data_sample.csv
+__pycache__/
+*.pyc
+.venv/
