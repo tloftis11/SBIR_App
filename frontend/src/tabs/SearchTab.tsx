@@ -2,10 +2,9 @@ import { useRef, useState } from 'react'
 import AwardCard from '../components/AwardCard'
 import {
   type AwardResult, type FilterOptions, type SearchFilters,
-  askStream, search,
+  askStream,
 } from '../lib/api'
 
-type Mode = 'search' | 'ask'
 interface Props { filterOptions: FilterOptions | null }
 
 const SUGGESTIONS = [
@@ -15,15 +14,6 @@ const SUGGESTIONS = [
   'climate resilient agriculture',
   'AI-powered cybersecurity',
 ]
-
-function Spinner() {
-  return (
-    <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none" style={{ color: '#aeaeb2' }}>
-      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity="0.3" />
-      <path d="M12 2a10 10 0 0110 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-    </svg>
-  )
-}
 
 // Horizontal filter chips — replaces sidebar entirely
 function FilterChips({
@@ -127,12 +117,10 @@ function FilterChips({
 
 export default function SearchTab({ filterOptions }: Props) {
   const [query,   setQuery]   = useState('')
-  const [mode,    setMode]    = useState<Mode>('search')
   const [filters, setFilters] = useState<SearchFilters>({})
 
   const [results,   setResults]   = useState<AwardResult[]>([])
   const [synthesis, setSynthesis] = useState('')
-  const [loading,   setLoading]   = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [error,     setError]     = useState<string | null>(null)
   const [searched,  setSearched]  = useState(false)
@@ -141,37 +129,24 @@ export default function SearchTab({ filterOptions }: Props) {
 
   function cancel() { cancelRef.current?.(); cancelRef.current = null }
 
-  async function handleSearch(q = query) {
+  function handleSearch(q = query) {
     if (!q.trim()) return
     setQuery(q)
     cancel()
     setError(null); setSynthesis(''); setResults([]); setSearched(true)
-
-    if (mode === 'search') {
-      setLoading(true)
-      try {
-        const res = await search(q, filters, 20)
-        setResults(res.results)
-      } catch (e) {
-        setError(String(e))
-      } finally {
-        setLoading(false)
-      }
-    } else {
-      setStreaming(true)
-      cancelRef.current = askStream(
-        q, filters, 25,
-        ev => {
-          if (ev.type === 'results') setResults(ev.data)
-          else if (ev.type === 'text') setSynthesis(s => s + ev.data)
-          else if (ev.type === 'done') setStreaming(false)
-        },
-        err => { setError(err.message); setStreaming(false) },
-      )
-    }
+    setStreaming(true)
+    cancelRef.current = askStream(
+      q, filters, 25,
+      ev => {
+        if (ev.type === 'results') setResults(ev.data)
+        else if (ev.type === 'text') setSynthesis(s => s + ev.data)
+        else if (ev.type === 'done') setStreaming(false)
+      },
+      err => { setError(err.message); setStreaming(false) },
+    )
   }
 
-  const busy = loading || streaming
+  const busy = streaming
   const hasResults = results.length > 0 || !!synthesis
 
   return (
@@ -210,31 +185,12 @@ export default function SearchTab({ filterOptions }: Props) {
             className="px-5 py-3 bg-apple-blue text-white text-[14px] font-semibold rounded-card hover:bg-apple-bluehover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             style={{ boxShadow: '0 2px 8px rgba(0,113,227,0.4)' }}
           >
-            {busy ? '…' : mode === 'ask' ? 'Ask Claude' : 'Search'}
+            {busy ? '…' : 'Ask Claude'}
           </button>
         </div>
 
-        {/* Mode + filter row */}
+        {/* Filter row */}
         <div className="mt-3 flex items-center gap-4 flex-wrap">
-          {/* Mode toggle — text links, not buttons */}
-          <div className="flex items-center gap-3 shrink-0">
-            {(['search', 'ask'] as Mode[]).map(m => (
-              <button
-                key={m}
-                onClick={() => setMode(m)}
-                className={`text-[12px] font-medium transition-colors ${
-                  mode === m ? 'text-apple-blue' : 'text-apple-tertiary hover:text-apple-secondary'
-                }`}
-              >
-                {m === 'search' ? 'Semantic Search' : 'Ask Claude'}
-              </button>
-            ))}
-          </div>
-
-          {/* Divider */}
-          <span style={{ width: 1, height: 14, background: 'rgba(0,0,0,0.10)', display: 'block' }} />
-
-          {/* Filters */}
           <FilterChips options={filterOptions} filters={filters} onChange={setFilters} />
         </div>
 
@@ -266,12 +222,6 @@ export default function SearchTab({ filterOptions }: Props) {
             <p className="text-[13px] text-red-500 py-2">{error}</p>
           )}
 
-          {loading && (
-            <div className="flex items-center gap-2.5 py-4 text-[13px] text-apple-tertiary">
-              <Spinner /> Searching…
-            </div>
-          )}
-
           {/* Claude synthesis */}
           {(synthesis || streaming) && (
             <div
@@ -291,7 +241,7 @@ export default function SearchTab({ filterOptions }: Props) {
           )}
 
           {/* Result count */}
-          {hasResults && !loading && (
+          {hasResults && !streaming && (
             <p className="text-[12px] text-apple-tertiary pl-1">
               {results.length} award{results.length !== 1 ? 's' : ''} matched
             </p>
@@ -303,7 +253,7 @@ export default function SearchTab({ filterOptions }: Props) {
           </div>
 
           {/* No results */}
-          {!loading && !streaming && results.length === 0 && !error && !synthesis && (
+          {!streaming && results.length === 0 && !error && !synthesis && (
             <div className="text-center py-16">
               <p className="text-[14px] text-apple-secondary">No results found</p>
               <p className="text-[13px] text-apple-tertiary mt-1">Try a broader or different query</p>

@@ -267,7 +267,7 @@ function CompanyDetail({ company }: { company: CompanySummary }) {
           style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', zIndex: 1 }}
         >
           <p className="text-[11px] font-semibold text-apple-tertiary uppercase tracking-wider">
-            {loading ? 'Loading…' : `${awards.length} award${awards.length !== 1 ? 's' : ''}`}
+            {loading ? 'Loading…' : 'Funding'}
           </p>
           <div className="flex gap-2">
             {(['year', 'amount'] as const).map(s => (
@@ -286,7 +286,7 @@ function CompanyDetail({ company }: { company: CompanySummary }) {
 
         {loading && (
           <div className="flex items-center gap-2 px-5 py-4 text-[13px] text-apple-tertiary">
-            <Spinner /> Loading awards…
+            <Spinner /> Loading…
           </div>
         )}
 
@@ -304,22 +304,29 @@ export default function CompaniesTab({ filterOptions }: Props) {
   const [agency,   setAgency]   = useState('')
   const [state,    setState_]   = useState('')
   const [phase,    setPhase]    = useState('')
+  const [yearMin,  setYearMin]  = useState('')
+  const [yearMax,  setYearMax]  = useState('')
   const [companies, setCompanies] = useState<CompanySummary[]>([])
   const [selected,  setSelected]  = useState<CompanySummary | null>(null)
   const [loading,   setLoading]   = useState(true)
 
   const inputRef = useRef<HTMLInputElement>(null)
 
-  function load(q = query, sb = sortBy, ag = agency, st = state, ph = phase) {
+  function load(q = query, sb = sortBy, ag = agency, st = state, ph = phase, ym = yearMin, ymx = yearMax) {
     setLoading(true)
     searchCompanies({
       query: q, sort_by: sb,
       filter_agency: ag || undefined,
       filter_state: st || undefined,
       filter_phase: ph || undefined,
-      limit: 50,
+      limit: 100,
     })
-      .then(setCompanies)
+      .then(results => {
+        let filtered = results
+        if (ym) filtered = filtered.filter(c => (c.year_last ?? 9999) >= Number(ym))
+        if (ymx) filtered = filtered.filter(c => (c.year_first ?? 0) <= Number(ymx))
+        setCompanies(filtered)
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }
@@ -380,7 +387,7 @@ export default function CompaniesTab({ filterOptions }: Props) {
                 {([['count', 'Most Awards'], ['funding', 'Most Funding']] as const).map(([v, label]) => (
                   <button
                     key={v}
-                    onClick={() => { setSortBy(v); load(query, v, agency, state, phase) }}
+                    onClick={() => { setSortBy(v); load(query, v, agency, state, phase, yearMin, yearMax) }}
                     className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-all ${
                       sortBy === v ? 'bg-white text-apple-text shadow-sm' : 'text-apple-secondary'
                     }`}
@@ -397,7 +404,7 @@ export default function CompaniesTab({ filterOptions }: Props) {
                 className="text-[11px] bg-[#f5f5f7] text-apple-secondary rounded-md px-2 py-1"
                 style={{ border: '1px solid rgba(0,0,0,0.09)' }}
                 value={agency}
-                onChange={e => { setAgency(e.target.value); load(query, sortBy, e.target.value, state, phase) }}
+                onChange={e => { setAgency(e.target.value); load(query, sortBy, e.target.value, state, phase, yearMin, yearMax) }}
               >
                 <option value="">All agencies</option>
                 {filterOptions?.agencies.map(a => <option key={a} value={a}>{a}</option>)}
@@ -406,7 +413,7 @@ export default function CompaniesTab({ filterOptions }: Props) {
                 className="text-[11px] bg-[#f5f5f7] text-apple-secondary rounded-md px-2 py-1"
                 style={{ border: '1px solid rgba(0,0,0,0.09)' }}
                 value={state}
-                onChange={e => { setState_(e.target.value); load(query, sortBy, agency, e.target.value, phase) }}
+                onChange={e => { setState_(e.target.value); load(query, sortBy, agency, e.target.value, phase, yearMin, yearMax) }}
               >
                 <option value="">All states</option>
                 {filterOptions?.states.map(s => <option key={s} value={s}>{s}</option>)}
@@ -414,7 +421,7 @@ export default function CompaniesTab({ filterOptions }: Props) {
               {['Phase I', 'Phase II'].map(p => (
                 <button
                   key={p}
-                  onClick={() => { const nv = phase === p ? '' : p; setPhase(nv); load(query, sortBy, agency, state, nv) }}
+                  onClick={() => { const nv = phase === p ? '' : p; setPhase(nv); load(query, sortBy, agency, state, nv, yearMin, yearMax) }}
                   className={`text-[11px] px-2.5 py-1 rounded-md font-medium transition-colors ${
                     phase === p ? 'bg-apple-text text-white' : 'bg-[#f5f5f7] text-apple-secondary'
                   }`}
@@ -423,6 +430,27 @@ export default function CompaniesTab({ filterOptions }: Props) {
                   {p.replace('Phase ', 'Ph ')}
                 </button>
               ))}
+              {/* Year range */}
+              <div
+                className="flex items-center gap-1 text-[11px] bg-[#f5f5f7] text-apple-secondary rounded-md px-2 py-1"
+                style={{ border: '1px solid rgba(0,0,0,0.09)' }}
+              >
+                <input
+                  type="number"
+                  placeholder="From"
+                  value={yearMin}
+                  onChange={e => { setYearMin(e.target.value); load(query, sortBy, agency, state, phase, e.target.value, yearMax) }}
+                  className="w-12 bg-transparent placeholder-apple-tertiary focus:outline-none text-center"
+                />
+                <span className="text-apple-tertiary">–</span>
+                <input
+                  type="number"
+                  placeholder="To"
+                  value={yearMax}
+                  onChange={e => { setYearMax(e.target.value); load(query, sortBy, agency, state, phase, yearMin, e.target.value) }}
+                  className="w-12 bg-transparent placeholder-apple-tertiary focus:outline-none text-center"
+                />
+              </div>
             </div>
           </div>
 
