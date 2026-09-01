@@ -9,21 +9,29 @@ import {
 // ── Static option lists ───────────────────────────────────────────────────────
 
 const DOMAIN_OPTIONS = [
+  // Defense & national security
   'Air domain (UAV/UAS, aircraft, missiles)',
   'Maritime (surface, subsurface, autonomous)',
   'Land / ground systems (armored, robotics)',
   'Space (launch, on-orbit, PNT, SATCOM)',
   'Cyber / electronic warfare / signals',
-  'Command, control & communications (C3)',
+  'C3 / command, control & communications',
   'ISR / sensor fusion / surveillance',
-  'Biodefense / CBRN / medical countermeasures',
+  // Civilian / health / science
+  'Healthcare / medical devices / diagnostics',
+  'Biodefense / CBRN / public health',
+  'Agriculture / food security / environment',
   'Energy, power & propulsion',
+  'Transportation / autonomous systems',
+  'Climate / sustainability / clean tech',
   'Dual-use / commercial-defense crossover',
 ]
 
 const AGENCY_OPTIONS = [
-  'Air Force', 'Army', 'Navy', 'DARPA', 'MDA',
-  'DHS', 'OSD', 'NGA', 'SOCOM', 'NASA',
+  // DOD
+  'Air Force', 'Army', 'Navy', 'DARPA', 'MDA', 'SOCOM', 'OSD', 'DLA',
+  // Civilian / other
+  'HHS', 'NSF', 'DOE', 'NASA', 'DHS', 'USDA', 'DOT', 'EPA', 'NGA', 'DOC',
 ]
 
 const RATIONALE_OPTIONS = [
@@ -31,9 +39,10 @@ const RATIONALE_OPTIONS = [
   'Acquire Phase II pipeline / near-term contract revenue',
   'Gain technical IP or patented technology',
   'Access specialized talent / technical team',
-  'Enter a new defense domain or market',
+  'Enter a new domain or market',
   'Strengthen AI / software capabilities',
   'Accelerate internal R&D programs',
+  'Enter federal health / civilian market',
   'Geographic market expansion',
 ]
 
@@ -267,9 +276,9 @@ export default function AcquisitionTargetsTab() {
             Potential Acquisition Targets
           </h1>
           <p className="mt-1 text-[13px] text-apple-secondary leading-relaxed">
-            Experimental · Answer the questions below to identify SBIR companies that match your
-            strategic acquisition criteria. Claude will research each candidate and generate a
-            strategic analysis.
+            Experimental · Identify SBIR companies that match your acquisition criteria across
+            defense, health, energy, and other federal R&amp;D markets. Claude researches each
+            candidate and generates a strategic analysis.
           </p>
         </div>
 

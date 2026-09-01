@@ -7,11 +7,18 @@ SSE event types:
   {"type": "targets",  "data": [...]}        — top 5 company dicts
   {"type": "acquired", "data": [...]}        — already-acquired companies
   {"type": "done"}
+
+Architecture: a background thread runs all blocking work (DB queries,
+Claude API calls) and pushes SSE strings into a queue.  The generator
+reads from that queue with a 20-second timeout, yielding SSE keepalive
+comments (": keepalive") when the queue is empty so Render/Nginx never
+sees an idle connection.
 """
 
 import json
 import logging
 import math
+import queue
 import threading
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -19,16 +26,15 @@ from typing import Iterator
 
 import anthropic
 
-from .search import get_db, semantic_search
+from .search import semantic_search
 from .models import SearchFilters
 
 log = logging.getLogger(__name__)
 
-RESEARCH_MODEL  = "claude-sonnet-5"
-SYNTHESIS_MODEL = "claude-opus-5"
-MAX_RESEARCH    = 12   # companies researched per run
-MAX_WORKERS     = 6    # parallel web-search threads
-TOP_N           = 5    # targets returned to UI
+CLAUDE_MODEL = "claude-opus-5"
+MAX_RESEARCH = 8    # companies researched per run
+MAX_WORKERS  = 4    # parallel web-search threads
+TOP_N        = 5    # active targets returned to UI
 
 
 # ── Candidate discovery ───────────────────────────────────────────────────────
@@ -45,7 +51,6 @@ def _find_candidates(criteria: dict) -> list[dict]:
     company_profile   = criteria.get("company_profile", "either")
 
     if technology_query:
-        # Semantic search → group by firm
         results = semantic_search(technology_query, SearchFilters(), 300)
 
         firms: dict[str, dict] = {}
@@ -77,39 +82,36 @@ def _find_candidates(criteria: dict) -> list[dict]:
             primary_agency = Counter(d["agencies"]).most_common(1)[0][0] if d["agencies"] else None
             state          = Counter(d["states"]).most_common(1)[0][0]   if d["states"]   else None
 
-            # Agency filter (soft: skip only if completely outside selected agencies)
             if selected_agencies and primary_agency not in selected_agencies:
                 if not any(a in selected_agencies for a in d["agencies"]):
                     continue
 
-            p2_rate    = d["phase_2_count"] / d["award_count"]
-            sem_score  = d["sim_sum"] / d["award_count"]
-            year_last  = d["year_last"] if d["year_last"] > 0 else 2020
-            fit_score  = _score(p2_rate, year_last, d["award_count"], sem_score)
+            p2_rate   = d["phase_2_count"] / d["award_count"]
+            sem_score = d["sim_sum"] / d["award_count"]
+            year_last = d["year_last"] if d["year_last"] > 0 else 2020
+            fit_score = _score(p2_rate, year_last, d["award_count"], sem_score)
 
-            # Profile modifier
             if company_profile == "specialist":
                 fit_score += p2_rate * 5
             elif company_profile == "platform":
                 fit_score += min(5, math.log10(max(d["award_count"], 1)) * 2)
 
             candidates.append({
-                "firm":          firm,
-                "state":         state,
-                "award_count":   d["award_count"],
-                "total_funding": d["total_funding"],
-                "phase_2_count": d["phase_2_count"],
-                "phase_2_rate":  round(p2_rate * 100, 1),
-                "year_first":    d["year_first"] if d["year_first"] < 9999 else None,
-                "year_last":     year_last,
+                "firm":           firm,
+                "state":          state,
+                "award_count":    d["award_count"],
+                "total_funding":  d["total_funding"],
+                "phase_2_count":  d["phase_2_count"],
+                "phase_2_rate":   round(p2_rate * 100, 1),
+                "year_first":     d["year_first"] if d["year_first"] < 9999 else None,
+                "year_last":      year_last,
                 "primary_agency": primary_agency,
-                "fit_score":     round(fit_score, 2),
+                "fit_score":      round(fit_score, 2),
             })
 
         return sorted(candidates, key=lambda x: x["fit_score"], reverse=True)
 
     else:
-        # No technology query → use search_companies RPC
         from .companies import search_companies
         filter_agency = next(iter(selected_agencies), None) if len(selected_agencies) == 1 else None
         sort_by = "funding" if company_profile == "platform" else "count"
@@ -120,7 +122,7 @@ def _find_candidates(criteria: dict) -> list[dict]:
             if (r.get("award_count") or 0) < 3:
                 continue
             p2_rate   = (r.get("phase_2_count") or 0) / max(r.get("award_count") or 1, 1)
-            year_last = (r.get("year_last") or 2020)
+            year_last = r.get("year_last") or 2020
             fit_score = _score(p2_rate, year_last, r.get("award_count") or 1)
             candidates.append({
                 "firm":           r["firm"],
@@ -159,8 +161,8 @@ def _extract_json(text: str) -> dict | None:
 
 
 def _research_company(company: dict, criteria: dict) -> dict:
-    firm          = company["firm"]
-    state         = company.get("state") or ""
+    firm           = company["firm"]
+    state          = company.get("state") or ""
     primary_agency = company.get("primary_agency") or ""
 
     ctx_parts = []
@@ -171,7 +173,7 @@ def _research_company(company: dict, criteria: dict) -> dict:
     context = (", " + ", ".join(ctx_parts)) if ctx_parts else ""
 
     prompt = (
-        f'Search for current information about "{firm}", a US defense/technology company'
+        f'Search for current information about "{firm}", a US technology company'
         f'{context} with {company["award_count"]} federal SBIR/STTR awards.\n\n'
         "Find:\n"
         "1. Revenue or size (annual revenue, employee count, or contract totals mentioned in news/press)\n"
@@ -192,7 +194,7 @@ def _research_company(company: dict, criteria: dict) -> dict:
     client = anthropic.Anthropic()
     try:
         response = client.messages.create(
-            model=RESEARCH_MODEL,
+            model=CLAUDE_MODEL,
             max_tokens=512,
             tools=[{"type": "web_search_20260209", "name": "web_search", "max_uses": 3}],
             messages=[{"role": "user", "content": prompt}],
@@ -257,124 +259,150 @@ def _format_company_for_synthesis(c: dict) -> str:
     )
 
 
-def _stream_synthesis(criteria: dict, top5: list[dict]) -> Iterator[str]:
-    if not top5:
-        yield "No suitable acquisition targets were found matching your criteria."
-        return
+# ── Background worker (runs in a thread, pushes to queue) ────────────────────
 
-    criteria_text  = _format_criteria(criteria)
-    companies_text = "\n\n".join(_format_company_for_synthesis(c) for c in top5)
+def _run_pipeline(criteria: dict, ev_queue: queue.Queue) -> None:
+    """All blocking work runs here; results go into ev_queue."""
 
-    system = (
-        "You are a senior M&A analyst specializing in defense technology acquisitions. "
-        "Analyze potential acquisition targets and provide specific, actionable strategic recommendations. "
-        "Write for a corporate development audience — be direct, cite specific data, and focus on strategic fit. "
-        "Use markdown formatting: ## headers for sections, **bold** for company names."
-    )
+    def push(obj: dict):
+        ev_queue.put(f"data: {json.dumps(obj)}\n\n")
 
-    prompt = (
-        f"## Acquirer Criteria\n{criteria_text}\n\n"
-        f"## Candidate Companies\n{companies_text}\n\n"
-        "Provide:\n"
-        "1. A 2-3 paragraph landscape assessment covering: what technology themes emerge, "
-        "what these companies signal about this market segment, and key strategic considerations.\n"
-        "2. For each company (in a ## header for each), a targeted assessment covering: "
-        "specific technology fit to the stated criteria, strategic rationale tied to stated goals, "
-        "key risks or integration considerations, and why this company over alternatives.\n\n"
-        "Be analytical and specific — reference actual award data, revenue signals, and agency relationships."
-    )
+    try:
+        push({"type": "progress", "data": {
+            "message": "Searching database for candidates…", "current": 0, "total": 0,
+        }})
 
-    client = anthropic.Anthropic()
-    with client.messages.stream(
-        model=SYNTHESIS_MODEL,
-        max_tokens=4096,
-        system=system,
-        messages=[{"role": "user", "content": prompt}],
-    ) as stream:
-        for token in stream.text_stream:
-            yield token
+        try:
+            candidates = _find_candidates(criteria)
+        except Exception as e:
+            log.error("Candidate search error: %s", e)
+            push({"type": "progress", "data": {
+                "message": f"Database search error: {e}", "current": 0, "total": 0,
+            }})
+            return
+
+        if not candidates:
+            push({"type": "progress", "data": {
+                "message": "No candidates found — try broadening your criteria.",
+                "current": 0, "total": 0,
+            }})
+            return
+
+        research_pool = candidates[:MAX_RESEARCH]
+        total = len(research_pool)
+
+        push({"type": "progress", "data": {
+            "message": f"Found {len(candidates)} candidates — researching top {total}…",
+            "current": 0, "total": total,
+        }})
+
+        # Parallel web research
+        lock = threading.Lock()
+        completed_count = [0]
+        researched: list[dict] = []
+        acquired:   list[dict] = []
+
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            future_to_firm = {
+                executor.submit(_research_company, c, criteria): c["firm"]
+                for c in research_pool
+            }
+            for future in as_completed(future_to_firm):
+                firm = future_to_firm[future]
+                try:
+                    enriched = future.result()
+                except Exception as e:
+                    log.warning("Research future error for %s: %s", firm, e)
+                    continue
+
+                with lock:
+                    completed_count[0] += 1
+                    if enriched.get("already_acquired"):
+                        acquired.append(enriched)
+                    else:
+                        researched.append(enriched)
+
+                push({"type": "progress", "data": {
+                    "message": f"Researched {firm}…",
+                    "current": completed_count[0],
+                    "total": total,
+                }})
+
+        top5      = sorted(researched, key=lambda x: x.get("fit_score", 0), reverse=True)[:TOP_N]
+        acq_sorted = sorted(acquired,  key=lambda x: x.get("fit_score", 0), reverse=True)
+
+        push({"type": "targets",  "data": top5})
+        push({"type": "acquired", "data": acq_sorted})
+
+        push({"type": "progress", "data": {
+            "message": "Generating strategic analysis…",
+            "current": total, "total": total,
+        }})
+
+        # Stream synthesis tokens
+        if top5:
+            criteria_text  = _format_criteria(criteria)
+            companies_text = "\n\n".join(_format_company_for_synthesis(c) for c in top5)
+
+            system = (
+                "You are a senior M&A analyst. Analyze potential acquisition targets and provide "
+                "specific, actionable strategic recommendations for a corporate development audience. "
+                "Be direct, cite data, focus on fit. Use markdown: ## headers, **bold** names."
+            )
+            prompt = (
+                f"## Acquirer Criteria\n{criteria_text}\n\n"
+                f"## Candidate Companies\n{companies_text}\n\n"
+                "Provide:\n"
+                "1. A 2-3 paragraph landscape assessment (themes, what these companies signal, "
+                "key strategic considerations).\n"
+                "2. For each company (## header per company): technology fit, strategic rationale "
+                "tied to stated goals, key risks, why this company over alternatives.\n\n"
+                "Reference specific award data, revenue signals, and agency relationships."
+            )
+
+            client = anthropic.Anthropic()
+            try:
+                with client.messages.stream(
+                    model=CLAUDE_MODEL,
+                    max_tokens=4096,
+                    system=system,
+                    messages=[{"role": "user", "content": prompt}],
+                ) as stream:
+                    for token in stream.text_stream:
+                        ev_queue.put(f"data: {json.dumps({'type': 'text', 'data': token})}\n\n")
+            except Exception as e:
+                log.error("Synthesis error: %s", e)
+                ev_queue.put(f"data: {json.dumps({'type': 'text', 'data': f'[Analysis error: {e}]'})}\n\n")
+        else:
+            ev_queue.put(
+                f"data: {json.dumps({'type': 'text', 'data': 'No active targets found matching criteria.'})}\n\n"
+            )
+
+    finally:
+        ev_queue.put(f"data: {json.dumps({'type': 'done'})}\n\n")
+        ev_queue.put(None)  # sentinel
 
 
 # ── Public streaming entry point ──────────────────────────────────────────────
 
 def stream_acquisition_targets(criteria: dict) -> Iterator[str]:
-    def ev(obj: dict) -> str:
-        return f"data: {json.dumps(obj)}\n\n"
+    """
+    Generator consumed by FastAPI StreamingResponse.
+    Reads from a queue fed by a background thread; yields SSE keepalive
+    comments every 20 s during silence so Render never sees an idle connection.
+    """
+    ev_queue: queue.Queue = queue.Queue()
 
-    yield ev({"type": "progress", "data": {"message": "Searching database for candidates…", "current": 0, "total": 0}})
+    worker = threading.Thread(target=_run_pipeline, args=(criteria, ev_queue), daemon=True)
+    worker.start()
 
-    try:
-        candidates = _find_candidates(criteria)
-    except Exception as e:
-        log.error("Candidate search error: %s", e)
-        yield ev({"type": "progress", "data": {"message": f"Database search error: {e}", "current": 0, "total": 0}})
-        yield ev({"type": "done"})
-        return
+    while True:
+        try:
+            item = ev_queue.get(timeout=20)
+            if item is None:
+                break
+            yield item
+        except queue.Empty:
+            yield ": keepalive\n\n"
 
-    if not candidates:
-        yield ev({"type": "progress", "data": {"message": "No candidates found. Try broadening your criteria.", "current": 0, "total": 0}})
-        yield ev({"type": "done"})
-        return
-
-    research_pool = candidates[:MAX_RESEARCH]
-    total = len(research_pool)
-    yield ev({"type": "progress", "data": {
-        "message": f"Found {len(candidates)} candidates — researching top {total}…",
-        "current": 0, "total": total,
-    }})
-
-    # Parallel web research
-    lock = threading.Lock()
-    completed_count = [0]
-    researched: list[dict] = []
-    acquired:   list[dict] = []
-
-    def research_one(company: dict) -> tuple[dict, str]:
-        enriched = _research_company(company, criteria)
-        with lock:
-            completed_count[0] += 1
-        return enriched, company["firm"]
-
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        future_to_firm = {executor.submit(research_one, c): c["firm"] for c in research_pool}
-        for future in as_completed(future_to_firm):
-            try:
-                enriched, firm = future.result()
-            except Exception as e:
-                log.warning("Research future error: %s", e)
-                continue
-
-            if enriched.get("already_acquired"):
-                with lock:
-                    acquired.append(enriched)
-            else:
-                with lock:
-                    researched.append(enriched)
-
-            yield ev({"type": "progress", "data": {
-                "message": f"Researched {firm}…",
-                "current": completed_count[0],
-                "total": total,
-            }})
-
-    # Sort active companies by fit score, pick top 5
-    top5 = sorted(researched, key=lambda x: x.get("fit_score", 0), reverse=True)[:TOP_N]
-    acq_sorted = sorted(acquired, key=lambda x: x.get("fit_score", 0), reverse=True)
-
-    yield ev({"type": "targets",  "data": top5})
-    yield ev({"type": "acquired", "data": acq_sorted})
-
-    # Stream Claude synthesis
-    yield ev({"type": "progress", "data": {
-        "message": "Generating strategic analysis…",
-        "current": total, "total": total,
-    }})
-
-    try:
-        for token in _stream_synthesis(criteria, top5):
-            yield ev({"type": "text", "data": token})
-    except Exception as e:
-        log.error("Synthesis error: %s", e)
-        yield ev({"type": "text", "data": f"\n\n[Analysis error: {e}]"})
-
-    yield ev({"type": "done"})
+    worker.join(timeout=5)
