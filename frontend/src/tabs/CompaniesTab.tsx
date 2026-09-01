@@ -126,7 +126,11 @@ function AwardRow({ award }: { award: CompanyAward }) {
   )
 }
 
-function CompanyDetail({ company }: { company: CompanySummary }) {
+interface ActiveFilters {
+  agency: string; state: string; phase: string; yearMin: string; yearMax: string
+}
+
+function CompanyDetail({ company, filters }: { company: CompanySummary; filters: ActiveFilters }) {
   const [awards, setAwards]         = useState<CompanyAward[]>([])
   const [loading, setLoading]       = useState(true)
   const [question, setQuestion]     = useState('')
@@ -168,9 +172,19 @@ function CompanyDetail({ company }: { company: CompanySummary }) {
     )
   }
 
-  // Compute agency breakdown from awards
+  // Apply active filters to the raw awards list
+  const filteredAwards = awards.filter(a => {
+    if (filters.agency  && a.agency     !== filters.agency)              return false
+    if (filters.state   && a.state_code !== filters.state)               return false
+    if (filters.phase   && a.phase      !== filters.phase)               return false
+    if (filters.yearMin && (a.award_year ?? 0)    < Number(filters.yearMin)) return false
+    if (filters.yearMax && (a.award_year ?? 9999) > Number(filters.yearMax)) return false
+    return true
+  })
+
+  // Compute agency breakdown from filtered awards
   const agencyMap: Record<string, number> = {}
-  for (const a of awards) {
+  for (const a of filteredAwards) {
     if (a.agency) agencyMap[a.agency] = (agencyMap[a.agency] ?? 0) + 1
   }
   const agencyBreakdown = Object.entries(agencyMap)
@@ -178,7 +192,7 @@ function CompanyDetail({ company }: { company: CompanySummary }) {
     .slice(0, 5)
   const maxAgency = agencyBreakdown[0]?.[1] ?? 1
 
-  const sorted = [...awards].sort((a, b) => {
+  const sorted = [...filteredAwards].sort((a, b) => {
     if (sortAwards === 'amount') return (b.award_amount ?? 0) - (a.award_amount ?? 0)
     return (b.award_year ?? 0) - (a.award_year ?? 0)
   })
@@ -549,7 +563,10 @@ export default function CompaniesTab({ filterOptions }: Props) {
                 <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
             </button>
-            <CompanyDetail company={selected} />
+            <CompanyDetail
+              company={selected}
+              filters={{ agency, state, phase, yearMin, yearMax }}
+            />
           </div>
         )}
 
