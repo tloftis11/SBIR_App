@@ -130,6 +130,8 @@ export interface CompanySearchRequest {
   filter_agency?: string
   filter_state?: string
   filter_phase?: string
+  filter_year_min?: number
+  filter_year_max?: number
   limit?: number
 }
 

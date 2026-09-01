@@ -322,14 +322,11 @@ export default function CompaniesTab({ filterOptions }: Props) {
       filter_agency: ag || undefined,
       filter_state: st || undefined,
       filter_phase: ph || undefined,
+      filter_year_min: ym ? Number(ym) : undefined,
+      filter_year_max: ymx ? Number(ymx) : undefined,
       limit: 100,
     })
-      .then(results => {
-        let filtered = results
-        if (ym) filtered = filtered.filter(c => (c.year_last ?? 9999) >= Number(ym))
-        if (ymx) filtered = filtered.filter(c => (c.year_first ?? 0) <= Number(ymx))
-        setCompanies(filtered)
-      })
+      .then(setCompanies)
       .catch(() => {})
       .finally(() => setLoading(false))
   }

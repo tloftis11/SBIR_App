@@ -28,6 +28,8 @@ def search_companies(
     filter_agency: str | None = None,
     filter_state: str | None = None,
     filter_phase: str | None = None,
+    filter_year_min: int | None = None,
+    filter_year_max: int | None = None,
     limit: int = 30,
 ) -> list[dict]:
     resp = get_db().rpc("search_companies", {
@@ -36,6 +38,8 @@ def search_companies(
         "filter_agency": filter_agency,
         "filter_state": filter_state,
         "filter_phase": filter_phase,
+        "filter_year_min": filter_year_min,
+        "filter_year_max": filter_year_max,
         "result_limit": limit,
     }).execute()
     return resp.data or []

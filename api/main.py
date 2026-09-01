@@ -94,6 +94,8 @@ class CompanySearchRequest(BaseModel):
     filter_agency: str | None = None
     filter_state: str | None = None
     filter_phase: str | None = None
+    filter_year_min: int | None = None
+    filter_year_max: int | None = None
     limit: int = 30
 
 
@@ -107,7 +109,8 @@ def companies_search(req: CompanySearchRequest):
     try:
         return search_companies(
             req.query, req.sort_by, req.filter_agency,
-            req.filter_state, req.filter_phase, req.limit,
+            req.filter_state, req.filter_phase,
+            req.filter_year_min, req.filter_year_max, req.limit,
         )
     except Exception as e:
         log.error("Company search error: %s", e)
