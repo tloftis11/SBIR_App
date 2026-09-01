@@ -20,6 +20,7 @@ from .search import semantic_search, get_filter_options
 from .synthesize import stream_synthesis
 from .trends import get_trends, stream_trend_analysis
 from .companies import search_companies, get_company_awards, stream_company_analysis
+from .acquisition import get_acquisition_info
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -114,6 +115,16 @@ def companies_search(req: CompanySearchRequest):
         )
     except Exception as e:
         log.error("Company search error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/companies/{firm_name}/acquisition")
+def company_acquisition_route(firm_name: str):
+    try:
+        awards = get_company_awards(firm_name)
+        return get_acquisition_info(firm_name, awards)
+    except Exception as e:
+        log.error("Acquisition error for %s: %s", firm_name, e)
         raise HTTPException(status_code=500, detail=str(e))
 
 

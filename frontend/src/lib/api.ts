@@ -145,6 +145,22 @@ export async function searchCompanies(req: CompanySearchRequest = {}): Promise<C
   return res.json()
 }
 
+export interface AcquisitionInfo {
+  acquired: boolean
+  acquired_by: string | null
+  acquisition_year: number | null
+  confidence: 'high' | 'medium' | 'low'
+  notes: string | null
+  checked_at?: string
+  from_cache?: boolean
+}
+
+export async function fetchAcquisition(firm: string): Promise<AcquisitionInfo> {
+  const res = await fetch(`${BASE}/companies/${encodeURIComponent(firm)}/acquisition`)
+  if (!res.ok) throw new Error('Acquisition check failed')
+  return res.json()
+}
+
 export async function fetchCompanyAwards(firm: string): Promise<CompanyAward[]> {
   const res = await fetch(`${BASE}/companies/${encodeURIComponent(firm)}/awards`)
   if (!res.ok) throw new Error('Failed to fetch company awards')

@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import {
+  type AcquisitionInfo,
   type CompanyAward,
   type CompanySummary,
   type FilterOptions,
   companyAskStream,
+  fetchAcquisition,
   fetchCompanyAwards,
   searchCompanies,
 } from '../lib/api'
@@ -125,22 +127,31 @@ function AwardRow({ award }: { award: CompanyAward }) {
 }
 
 function CompanyDetail({ company }: { company: CompanySummary }) {
-  const [awards, setAwards]     = useState<CompanyAward[]>([])
-  const [loading, setLoading]   = useState(true)
-  const [question, setQuestion] = useState('')
-  const [answer, setAnswer]     = useState('')
-  const [streaming, setStreaming] = useState(false)
+  const [awards, setAwards]         = useState<CompanyAward[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [question, setQuestion]     = useState('')
+  const [answer, setAnswer]         = useState('')
+  const [streaming, setStreaming]   = useState(false)
   const [sortAwards, setSortAwards] = useState<'year' | 'amount'>('year')
+  const [acquisition, setAcquisition]       = useState<AcquisitionInfo | null>(null)
+  const [acqLoading, setAcqLoading]         = useState(false)
   const cancelRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     setLoading(true)
     setAwards([])
     setAnswer('')
+    setAcquisition(null)
     fetchCompanyAwards(company.firm)
       .then(setAwards)
       .catch(() => {})
       .finally(() => setLoading(false))
+
+    setAcqLoading(true)
+    fetchAcquisition(company.firm)
+      .then(setAcquisition)
+      .catch(() => {})
+      .finally(() => setAcqLoading(false))
   }, [company.firm])
 
   function handleAsk() {
@@ -203,6 +214,35 @@ function CompanyDetail({ company }: { company: CompanySummary }) {
             </div>
           ))}
         </div>
+
+        {/* Acquisition badge */}
+        {acqLoading && (
+          <div className="flex items-center gap-1.5 mt-3 text-[11px] text-apple-tertiary">
+            <Spinner />
+            <span>Checking acquisition history…</span>
+          </div>
+        )}
+        {!acqLoading && acquisition?.acquired && (
+          <div
+            className="flex items-start gap-2 mt-3 px-3 py-2 rounded-lg text-[12px]"
+            style={{ background: 'rgba(255,149,0,0.08)', border: '1px solid rgba(255,149,0,0.20)' }}
+          >
+            <span style={{ color: '#ff9500', marginTop: 1 }}>⊕</span>
+            <div>
+              <span className="text-apple-secondary">Acquired by </span>
+              <span className="font-semibold text-apple-text">{acquisition.acquired_by}</span>
+              {acquisition.acquisition_year && (
+                <span className="text-apple-secondary"> ({acquisition.acquisition_year})</span>
+              )}
+              {acquisition.confidence === 'low' && (
+                <span className="ml-1 text-apple-tertiary">· unverified</span>
+              )}
+              {acquisition.notes && (
+                <p className="text-[11px] text-apple-tertiary mt-0.5">{acquisition.notes}</p>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Agency breakdown mini-chart */}
         {agencyBreakdown.length > 0 && (
