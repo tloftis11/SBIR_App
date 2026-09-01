@@ -326,7 +326,14 @@ export default function CompaniesTab({ filterOptions }: Props) {
       filter_year_max: ymx ? Number(ymx) : undefined,
       limit: 100,
     })
-      .then(setCompanies)
+      .then(results => {
+        setCompanies(results)
+        // Refresh the detail panel with filtered stats, or close it if the
+        // company is no longer in the result set
+        setSelected(prev =>
+          prev ? (results.find(c => c.firm === prev.firm) ?? null) : null
+        )
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }
