@@ -254,7 +254,9 @@ function CompanyDetail({ company }: { company: CompanySummary }) {
               <p className="text-[10px] font-semibold text-apple-tertiary uppercase tracking-wider">Claude</p>
               {streaming && <span className="w-1.5 h-1.5 rounded-full bg-apple-blue animate-pulse" />}
             </div>
-            <p className="text-[13px] text-apple-text leading-relaxed whitespace-pre-wrap">{answer}</p>
+            <div className="overflow-y-auto" style={{ maxHeight: 240 }}>
+              <p className="text-[13px] text-apple-text leading-relaxed whitespace-pre-wrap">{answer}</p>
+            </div>
           </div>
         )}
       </div>

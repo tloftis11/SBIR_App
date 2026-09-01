@@ -232,6 +232,51 @@ export default function TrendsTab({ filterOptions }: Props) {
         )}
       </div>
 
+      {/* Claude Q&A */}
+      <div
+        className="bg-white rounded-card p-5 space-y-4"
+        style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}
+      >
+        <div>
+          <p className="text-[13px] font-semibold text-apple-text">Ask about SBIR trends</p>
+          <p className="text-[12px] text-apple-tertiary mt-0.5">
+            Ask about funding shifts, top performers, agency priorities, or any pattern across the data.
+          </p>
+        </div>
+
+        <div className="flex gap-2.5">
+          <input
+            type="text"
+            value={question}
+            onChange={e => setQuestion(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleAsk()}
+            placeholder='e.g. "Which agencies have grown the most since 2010?"'
+            className="flex-1 text-[14px] bg-[#f5f5f7] text-apple-text rounded-input px-4 py-2.5 placeholder-apple-tertiary"
+            style={{ border: '1px solid rgba(0,0,0,0.10)', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.04)' }}
+          />
+          <button
+            onClick={handleAsk}
+            disabled={streaming || !question.trim()}
+            className="px-5 py-2.5 bg-apple-blue text-white text-[13px] font-semibold rounded-btn hover:bg-apple-bluehover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            style={{ boxShadow: '0 1px 3px rgba(0,113,227,0.35)' }}
+          >
+            {streaming ? '…' : 'Ask'}
+          </button>
+        </div>
+
+        {(answer || streaming) && (
+          <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }} className="pt-4">
+            <div className="flex items-center gap-2 mb-2">
+              <p className="text-[11px] font-semibold text-apple-tertiary uppercase tracking-wider">
+                Claude
+              </p>
+              {streaming && <span className="w-1.5 h-1.5 rounded-full bg-apple-blue animate-pulse" />}
+            </div>
+            <p className="text-[14px] text-apple-text leading-relaxed whitespace-pre-wrap">{answer}</p>
+          </div>
+        )}
+      </div>
+
       {error && (
         <div
           className="bg-white rounded-card px-5 py-4 text-[13px] text-red-500"
@@ -295,51 +340,6 @@ export default function TrendsTab({ filterOptions }: Props) {
           </div>
         </>
       )}
-
-      {/* Claude Q&A */}
-      <div
-        className="bg-white rounded-card p-5 space-y-4"
-        style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}
-      >
-        <div>
-          <p className="text-[13px] font-semibold text-apple-text">Ask about SBIR trends</p>
-          <p className="text-[12px] text-apple-tertiary mt-0.5">
-            Ask about funding shifts, top performers, agency priorities, or any pattern across the data.
-          </p>
-        </div>
-
-        <div className="flex gap-2.5">
-          <input
-            type="text"
-            value={question}
-            onChange={e => setQuestion(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleAsk()}
-            placeholder='e.g. "Which agencies have grown the most since 2010?"'
-            className="flex-1 text-[14px] bg-[#f5f5f7] text-apple-text rounded-input px-4 py-2.5 placeholder-apple-tertiary"
-            style={{ border: '1px solid rgba(0,0,0,0.10)', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.04)' }}
-          />
-          <button
-            onClick={handleAsk}
-            disabled={streaming || !question.trim()}
-            className="px-5 py-2.5 bg-apple-blue text-white text-[13px] font-semibold rounded-btn hover:bg-apple-bluehover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            style={{ boxShadow: '0 1px 3px rgba(0,113,227,0.35)' }}
-          >
-            {streaming ? '…' : 'Ask'}
-          </button>
-        </div>
-
-        {(answer || streaming) && (
-          <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }} className="pt-4">
-            <div className="flex items-center gap-2 mb-2">
-              <p className="text-[11px] font-semibold text-apple-tertiary uppercase tracking-wider">
-                Claude
-              </p>
-              {streaming && <span className="w-1.5 h-1.5 rounded-full bg-apple-blue animate-pulse" />}
-            </div>
-            <p className="text-[14px] text-apple-text leading-relaxed whitespace-pre-wrap">{answer}</p>
-          </div>
-        )}
-      </div>
     </div>
   )
 }
