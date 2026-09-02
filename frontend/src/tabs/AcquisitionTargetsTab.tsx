@@ -54,12 +54,6 @@ function fmt(n: number) {
   return `$${n}`
 }
 
-function confidenceColor(c?: string) {
-  if (c === 'high')   return 'text-green-600'
-  if (c === 'medium') return 'text-amber-600'
-  return 'text-apple-secondary'
-}
-
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function MultiCheck({
