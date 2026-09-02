@@ -49,9 +49,10 @@ def _score(p2_rate: float, year_last: int, award_count: int, sem_score: float = 
 
 def _find_candidates(criteria: dict) -> list[dict]:
     """
-    Strategy: always pull company-level rows from search_companies (fast,
-    reliable aggregates), then use semantic search as a relevance signal
-    to rerank and filter when a technology_query is provided.
+    Always use search_companies for company-level aggregates (reliable, fast).
+    Semantic search is optional: if it works, it filters and reranks candidates;
+    if it fails or returns nothing, we fall back to the full company list so we
+    always have candidates to research.
     """
     technology_query  = (criteria.get("technology_query") or "").strip()
     selected_agencies = set(criteria.get("agencies") or [])
@@ -62,12 +63,12 @@ def _find_candidates(criteria: dict) -> list[dict]:
     sort_by       = "funding" if company_profile == "platform" else "count"
     filter_agency = next(iter(selected_agencies), None) if len(selected_agencies) == 1 else None
 
-    # Pull a broad company list — always returns results
     rows = search_companies(
         query="", sort_by=sort_by, filter_agency=filter_agency, limit=150,
     )
+    log.info("search_companies returned %d rows", len(rows))
 
-    # Optional: semantic search gives per-firm relevance scores
+    # Semantic search for relevance scores — lowercase keys for robust matching
     semantic_scores: dict[str, float] = {}
     if technology_query:
         try:
@@ -75,26 +76,30 @@ def _find_candidates(criteria: dict) -> list[dict]:
             firm_sims: dict[str, list[float]] = {}
             for r in sem_results:
                 if r.firm:
-                    firm_sims.setdefault(r.firm, []).append(r.similarity)
-            for firm, sims in firm_sims.items():
-                semantic_scores[firm] = sum(sims) / len(sims)
+                    firm_sims.setdefault(r.firm.lower().strip(), []).append(r.similarity)
+            for key, sims in firm_sims.items():
+                semantic_scores[key] = sum(sims) / len(sims)
+            log.info("Semantic search found %d unique firms", len(semantic_scores))
         except Exception as e:
-            log.warning("Semantic search failed during candidate discovery: %s", e)
+            log.warning("Semantic search error (will use all companies): %s", e)
+
+    use_semantic_filter = bool(technology_query and semantic_scores)
+    log.info("use_semantic_filter=%s", use_semantic_filter)
 
     candidates = []
     for r in rows:
         if (r.get("award_count") or 0) < 3:
             continue
         firm      = r["firm"]
+        firm_key  = firm.lower().strip()
         p2_rate   = (r.get("phase_2_count") or 0) / max(r.get("award_count") or 1, 1)
         year_last = r.get("year_last") or 2020
-        sem_score = semantic_scores.get(firm, 0.0)
 
-        # When a technology query was given, only keep firms that appeared
-        # in the semantic results (at least one semantically relevant award)
-        if technology_query and firm not in semantic_scores:
+        # Only filter by semantic relevance when semantic search actually returned data
+        if use_semantic_filter and firm_key not in semantic_scores:
             continue
 
+        sem_score = semantic_scores.get(firm_key, 0.0)
         fit_score = _score(p2_rate, year_last, r.get("award_count") or 1, sem_score)
 
         if company_profile == "specialist":
@@ -115,6 +120,7 @@ def _find_candidates(criteria: dict) -> list[dict]:
             "fit_score":      round(fit_score, 2),
         })
 
+    log.info("_find_candidates returning %d candidates", len(candidates))
     return sorted(candidates, key=lambda x: x["fit_score"], reverse=True)
 
 
