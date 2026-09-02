@@ -96,67 +96,35 @@ function MultiCheck({
 }
 
 function TargetCard({ company }: { company: CompanyTarget }) {
-  const [open, setOpen] = useState(false)
   const funding = company.total_funding ? fmt(company.total_funding) : 'N/A'
   const years   = company.year_first && company.year_last
     ? `${company.year_first}–${company.year_last}`
-    : company.year_last ?? '—'
+    : company.year_last ? `–${company.year_last}` : '—'
 
   return (
-    <div
-      className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4 cursor-pointer hover:shadow-sm transition-shadow"
-      onClick={() => setOpen(o => !o)}
-    >
-      {/* Header row */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <p className="text-[14px] font-semibold text-apple-text truncate">{company.firm}</p>
-          <p className="text-[12px] text-apple-secondary mt-0.5">
-            {company.state && <span className="mr-2">{company.state}</span>}
-            {company.primary_agency && <span>{company.primary_agency}</span>}
-          </p>
-        </div>
-        {/* Revenue badge */}
-        {company.revenue_estimate && company.revenue_estimate !== 'unknown' && (
-          <span className="shrink-0 text-[11px] font-medium bg-[rgba(0,0,0,0.05)] text-apple-text px-2 py-0.5 rounded-full">
-            {company.revenue_estimate}
-          </span>
-        )}
-      </div>
+    <div className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4">
+      {/* Header */}
+      <p className="text-[14px] font-semibold text-apple-text">{company.firm}</p>
+      {(company.state || company.primary_agency) && (
+        <p className="text-[12px] text-apple-secondary mt-0.5">
+          {[company.state, company.primary_agency].filter(Boolean).join(' · ')}
+        </p>
+      )}
 
-      {/* Metrics row */}
-      <div className="mt-3 flex flex-wrap gap-3">
-        {[
+      {/* SBIR metrics */}
+      <div className="mt-3 flex flex-wrap gap-4">
+        {([
           ['Awards', `${company.award_count}`],
           ['Phase II', `${company.phase_2_rate}%`],
-          ['Total Funding', funding],
-          ['Active', `${years}`],
-        ].map(([lbl, val]) => (
+          ['SBIR Funding', funding],
+          ['Active', years],
+        ] as [string, string][]).map(([lbl, val]) => (
           <div key={lbl} className="flex flex-col">
-            <span className="text-[10px] text-apple-secondary uppercase tracking-wide">{lbl}</span>
+            <span className="text-[10px] text-apple-secondary uppercase tracking-wide leading-tight">{lbl}</span>
             <span className="text-[13px] font-medium text-apple-text">{val}</span>
           </div>
         ))}
       </div>
-
-      {/* Recent news (always shown) */}
-      {company.recent_news && company.recent_news !== 'No information found.' && (
-        <p className="mt-3 text-[12px] text-apple-secondary leading-relaxed border-t border-[rgba(0,0,0,0.06)] pt-3">
-          {company.recent_news}
-        </p>
-      )}
-
-      {/* Expanded: employee count + confidence */}
-      {open && (
-        <div className="mt-2 pt-2 border-t border-[rgba(0,0,0,0.06)] flex items-center gap-4">
-          {company.employee_count && (
-            <span className="text-[12px] text-apple-secondary">~{company.employee_count} employees</span>
-          )}
-          <span className={`text-[11px] font-medium ${confidenceColor(company.web_confidence)}`}>
-            Web confidence: {company.web_confidence ?? 'low'}
-          </span>
-        </div>
-      )}
     </div>
   )
 }
