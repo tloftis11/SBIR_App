@@ -48,96 +48,74 @@ def _score(p2_rate: float, year_last: int, award_count: int, sem_score: float = 
 
 
 def _find_candidates(criteria: dict) -> list[dict]:
+    """
+    Strategy: always pull company-level rows from search_companies (fast,
+    reliable aggregates), then use semantic search as a relevance signal
+    to rerank and filter when a technology_query is provided.
+    """
     technology_query  = (criteria.get("technology_query") or "").strip()
     selected_agencies = set(criteria.get("agencies") or [])
     company_profile   = criteria.get("company_profile", "either")
 
+    from .companies import search_companies
+
+    sort_by       = "funding" if company_profile == "platform" else "count"
+    filter_agency = next(iter(selected_agencies), None) if len(selected_agencies) == 1 else None
+
+    # Pull a broad company list — always returns results
+    rows = search_companies(
+        query="", sort_by=sort_by, filter_agency=filter_agency, limit=150,
+    )
+
+    # Optional: semantic search gives per-firm relevance scores
+    semantic_scores: dict[str, float] = {}
     if technology_query:
-        results = semantic_search(technology_query, SearchFilters(), SEMANTIC_LIMIT)
+        try:
+            sem_results = semantic_search(technology_query, SearchFilters(), SEMANTIC_LIMIT)
+            firm_sims: dict[str, list[float]] = {}
+            for r in sem_results:
+                if r.firm:
+                    firm_sims.setdefault(r.firm, []).append(r.similarity)
+            for firm, sims in firm_sims.items():
+                semantic_scores[firm] = sum(sims) / len(sims)
+        except Exception as e:
+            log.warning("Semantic search failed during candidate discovery: %s", e)
 
-        firms: dict[str, dict] = {}
-        for r in results:
-            if not r.firm:
-                continue
-            d = firms.setdefault(r.firm, {
-                "award_count": 0, "total_funding": 0,
-                "phase_2_count": 0, "year_first": 9999, "year_last": 0,
-                "agencies": [], "states": [], "sim_sum": 0.0,
-            })
-            d["award_count"]   += 1
-            d["total_funding"] += r.award_amount or 0
-            if r.phase and "II" in r.phase and "III" not in r.phase:
-                d["phase_2_count"] += 1
-            if r.award_year:
-                d["year_first"] = min(d["year_first"], r.award_year)
-                d["year_last"]  = max(d["year_last"],  r.award_year)
-            if r.agency:
-                d["agencies"].append(r.agency)
-            if r.state_code:
-                d["states"].append(r.state_code)
-            d["sim_sum"] += r.similarity
+    candidates = []
+    for r in rows:
+        if (r.get("award_count") or 0) < 3:
+            continue
+        firm      = r["firm"]
+        p2_rate   = (r.get("phase_2_count") or 0) / max(r.get("award_count") or 1, 1)
+        year_last = r.get("year_last") or 2020
+        sem_score = semantic_scores.get(firm, 0.0)
 
-        candidates = []
-        for firm, d in firms.items():
-            primary_agency = Counter(d["agencies"]).most_common(1)[0][0] if d["agencies"] else None
-            state          = Counter(d["states"]).most_common(1)[0][0]   if d["states"]   else None
+        # When a technology query was given, only keep firms that appeared
+        # in the semantic results (at least one semantically relevant award)
+        if technology_query and firm not in semantic_scores:
+            continue
 
-            if selected_agencies and primary_agency not in selected_agencies:
-                if not any(a in selected_agencies for a in d["agencies"]):
-                    continue
+        fit_score = _score(p2_rate, year_last, r.get("award_count") or 1, sem_score)
 
-            p2_rate   = d["phase_2_count"] / d["award_count"]
-            sem_score = d["sim_sum"] / d["award_count"]
-            year_last = d["year_last"] if d["year_last"] > 0 else 2020
-            fit_score = _score(p2_rate, year_last, d["award_count"], sem_score)
+        if company_profile == "specialist":
+            fit_score += p2_rate * 5
+        elif company_profile == "platform":
+            fit_score += min(5, math.log10(max(r.get("award_count") or 1, 1)) * 2)
 
-            if company_profile == "specialist":
-                fit_score += p2_rate * 5
-            elif company_profile == "platform":
-                fit_score += min(5, math.log10(max(d["award_count"], 1)) * 2)
+        candidates.append({
+            "firm":           firm,
+            "state":          None,
+            "award_count":    r.get("award_count", 0),
+            "total_funding":  r.get("total_funding", 0),
+            "phase_2_count":  r.get("phase_2_count", 0),
+            "phase_2_rate":   round(p2_rate * 100, 1),
+            "year_first":     r.get("year_first"),
+            "year_last":      year_last,
+            "primary_agency": None,
+            "fit_score":      round(fit_score, 2),
+        })
 
-            candidates.append({
-                "firm":           firm,
-                "state":          state,
-                "award_count":    d["award_count"],
-                "total_funding":  d["total_funding"],
-                "phase_2_count":  d["phase_2_count"],
-                "phase_2_rate":   round(p2_rate * 100, 1),
-                "year_first":     d["year_first"] if d["year_first"] < 9999 else None,
-                "year_last":      year_last,
-                "primary_agency": primary_agency,
-                "fit_score":      round(fit_score, 2),
-            })
-
-        return sorted(candidates, key=lambda x: x["fit_score"], reverse=True)
-
-    else:
-        from .companies import search_companies
-        filter_agency = next(iter(selected_agencies), None) if len(selected_agencies) == 1 else None
-        sort_by = "funding" if company_profile == "platform" else "count"
-        rows = search_companies(query="", sort_by=sort_by, filter_agency=filter_agency, limit=80)
-
-        candidates = []
-        for r in rows:
-            if (r.get("award_count") or 0) < 3:
-                continue
-            p2_rate   = (r.get("phase_2_count") or 0) / max(r.get("award_count") or 1, 1)
-            year_last = r.get("year_last") or 2020
-            fit_score = _score(p2_rate, year_last, r.get("award_count") or 1)
-            candidates.append({
-                "firm":           r["firm"],
-                "state":          None,
-                "award_count":    r.get("award_count", 0),
-                "total_funding":  r.get("total_funding", 0),
-                "phase_2_count":  r.get("phase_2_count", 0),
-                "phase_2_rate":   round(p2_rate * 100, 1),
-                "year_first":     r.get("year_first"),
-                "year_last":      year_last,
-                "primary_agency": None,
-                "fit_score":      round(fit_score, 2),
-            })
-
-        return sorted(candidates, key=lambda x: x["fit_score"], reverse=True)
+    return sorted(candidates, key=lambda x: x["fit_score"], reverse=True)
 
 
 # ── Per-company web research ──────────────────────────────────────────────────
@@ -283,7 +261,11 @@ def _run_pipeline(criteria: dict, ev_queue: queue.Queue) -> None:
 
         if not candidates:
             push({"type": "progress", "data": {
-                "message": "No candidates found — try broadening your criteria.",
+                "message": (
+                    "No candidates matched your criteria. "
+                    "Tip: if you selected specific agencies, the query may be too narrow — "
+                    "try removing agency filters or broadening your technology description."
+                ),
                 "current": 0, "total": 0,
             }})
             return
