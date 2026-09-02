@@ -197,25 +197,26 @@ def _do_synthesis(criteria: dict, companies: list[dict]) -> str:
         f"## Candidate Companies (SBIR data since {YEAR_CUTOFF})\n\n"
         f"{companies_block}\n\n"
         f"## Acquirer Criteria\n{criteria_text}\n\n"
-        "Use web search to research each company above — look for: current annual revenue "
-        "or company size signals, whether the company has been acquired recently, and "
-        "any notable recent contracts or news.\n\n"
-        "Then write a full strategic acquisition analysis with these sections:\n"
-        "## Landscape Assessment\n"
-        "2-3 paragraphs on overall technology themes, what this market segment looks like, "
-        "and key strategic considerations for the acquirer.\n\n"
-        "## [Company Name] (one section per company)\n"
-        "For each: technology fit to stated criteria, revenue and size estimate based on "
-        "web search, acquisition status, strategic rationale tied to stated goals, "
-        "key risks or integration considerations.\n\n"
-        "Be specific and analytical — cite SBIR award data and web search findings."
+        "Use web search to research each company above. For each company look for: "
+        "employee count, annual revenue signals (contracts, press releases, LinkedIn, "
+        "USASpending.gov), estimated valuation or any known transaction multiples, "
+        "whether the company has been acquired, and any notable recent news or contracts.\n\n"
+        "Write one section per company using this exact format:\n\n"
+        "## [Company Name]\n"
+        "**Revenue estimate:** [your estimate with basis — e.g. '$8–12M based on 3 active Phase II contracts and ~40 FTEs']\n"
+        "**Valuation estimate:** [typical SBIR acqui-hire/IP multiples are 1–3× revenue; adjust for Phase II pipeline, IP quality, and customer concentration]\n"
+        "**Technology fit:** [1–2 sentences on alignment to stated criteria]\n"
+        "**Strategic rationale:** [why this company specifically, tied to the acquirer's stated goals]\n"
+        "**Key risks:** [1–2 specific risks — customer concentration, key-person dependency, contract cliff, etc.]\n\n"
+        "Be specific and cite data from both the SBIR portfolio and your web search. "
+        "Do not write a landscape section — jump straight into the company profiles."
     )
 
     client = anthropic.Anthropic()
     try:
         response = client.messages.create(
             model=CLAUDE_MODEL,
-            max_tokens=4096,
+            max_tokens=6000,
             system=system,
             tools=[{"type": "web_search_20260209", "name": "web_search", "max_uses": 5}],
             messages=[{"role": "user", "content": prompt}],
