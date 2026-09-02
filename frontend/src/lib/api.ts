@@ -238,7 +238,7 @@ export interface CompanyTarget {
 }
 
 export type AcqTargetEvent =
-  | { type: 'progress'; data: { message: string; current: number; total: number } }
+  | { type: 'progress'; data: { message: string; current: number; total: number; step?: number } }
   | { type: 'company'; data: CompanyTarget }
   | { type: 'text'; data: string }
   | { type: 'done' }
